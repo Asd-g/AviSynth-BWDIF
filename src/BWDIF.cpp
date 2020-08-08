@@ -267,8 +267,8 @@ BWDIF::BWDIF(PClip _child, int field, int opt, IScriptEnvironment* env)
 {
     if (vi.height < 4)
         env->ThrowError("BWDIF: height must be greater than or equal to 4");
-    if (field_ < -1 || field_ > 3)
-        env->ThrowError("BWDIF: field must be -1, 0, 1, 2, or 3");
+    if (field_ < -2 || field_ > 3)
+        env->ThrowError("BWDIF: field must be -2, -1, 0, 1, 2, or 3");
     if (opt_ < -1 || opt_ > 3)
         env->ThrowError("BWDIF: opt must be between -1..3");
     if (!(env->GetCPUFlags() & CPUF_AVX512F) && opt_ == 3)
@@ -404,16 +404,17 @@ BWDIF::BWDIF(PClip _child, int field, int opt, IScriptEnvironment* env)
         }
     }
 
-    if (field_ > 1)
+    if (field_ == - 2 || field_ > 1)
     {
         vi.num_frames *= 2;
         vi.fps_numerator *= 2;
     }
-
-    peak = (1 << vi.BitsPerComponent()) - 1;
-
     if (field_ == -1)
         field_ = child->GetParity(0) ? 1 : 0;
+    if (field_ == -2)
+        field_ = child->GetParity(0) ? 3 : 2;
+
+    peak = (1 << vi.BitsPerComponent()) - 1;
 
     has_at_least_v8 = true;
     try { env->CheckVersion(8); }

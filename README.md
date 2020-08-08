@@ -17,6 +17,7 @@ BWDIF (clip, int "field", int "opt")
     
 - field\
     Controls the mode of operation (double vs same rate) and which field is kept.\
+    -2: Double rate (alternates each frame), AviSynth internal order.\
     -1: Same rate, AviSynth internal order.\
     0: Same rate, keep bottom field.\
     1: Same rate, keep top field.\
