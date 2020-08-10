@@ -1,3 +1,6 @@
+##### 1.1.1:
+    Fixed double rate.
+
 ##### 1.1.0:
     Added field option -2.
 

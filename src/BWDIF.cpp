@@ -423,17 +423,21 @@ BWDIF::BWDIF(PClip _child, int field, int opt, IScriptEnvironment* env)
 
 PVideoFrame __stdcall BWDIF::GetFrame(int n, IScriptEnvironment* env)
 {
+    const int nsaved = n;
     int field = field_;
-    if (field_ > 1)
+    if (field_ == -2 || field_ > 1)
     {
         n /= 2;
-        field -= 2;        
+        field -= 2;
     }
 
     PVideoFrame prev = child->GetFrame(std::max(n - 1, 0), env);
     PVideoFrame cur = child->GetFrame(n, env);
     PVideoFrame next = child->GetFrame(std::min(n + 1, vi.num_frames - 1), env);
-    PVideoFrame dst = has_at_least_v8 ? env->NewVideoFrameP(vi, &cur) : env->NewVideoFrame(vi);      
+    PVideoFrame dst = has_at_least_v8 ? env->NewVideoFrameP(vi, &cur) : env->NewVideoFrame(vi);
+
+    if (field_ == -2 || field_ > 1)
+        field = nsaved & 1 ? (field == 0) : (field == 1);
 
     switch (vi.ComponentSize())
     {
