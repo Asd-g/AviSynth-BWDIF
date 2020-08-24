@@ -7,7 +7,7 @@ This is [a port of the VapourSynth plugin Bwdif](https://github.com/HomeOfVapour
 # Usage
 
 ```
-BWDIF (clip, int "field", int "opt")
+BWDIF (clip, int "field", clip "edeint", int "opt")
 ```
 
 ## Parameters:
@@ -24,6 +24,10 @@ BWDIF (clip, int "field", int "opt")
     2: Double rate (alternates each frame), starts with bottom.\
     3: Double rate (alternates each frame), starts with top.\
     Default: -1.
+    
+- edeint\
+    Clip from which to take spatial predictions. This clip must be the same width, height, and colorspace as the input clip.\
+    If using same rate output, this clip should have the same number of frames as the input. If using double rate output, this clip should have twice as many frames as the input.
     
 - opt\
     Sets which cpu optimizations to use.\

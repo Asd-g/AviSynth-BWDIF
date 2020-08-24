@@ -1,3 +1,6 @@
+##### 1.2.0:
+    Added parameter edeint.
+
 ##### 1.1.1:
     Fixed double rate.
 
