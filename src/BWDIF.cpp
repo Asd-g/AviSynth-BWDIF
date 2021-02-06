@@ -472,13 +472,19 @@ PVideoFrame __stdcall BWDIF::GetFrame(int n, IScriptEnvironment* env)
     PVideoFrame prev = child->GetFrame(std::max(n - 1, 0), env);
     PVideoFrame cur = child->GetFrame(n, env);
     PVideoFrame next = child->GetFrame(std::min(n + 1, vi.num_frames - 1), env);
-    PVideoFrame dst = has_at_least_v8 ? env->NewVideoFrameP(vi, &cur) : env->NewVideoFrame(vi);    
+    PVideoFrame dst = env->NewVideoFrame(vi);    
 
     switch (vi.ComponentSize())
     {
         case 1: filter<uint8_t>(prev, cur, next, dst, edeint, field, 0, env); break;
         case 2: filter<uint16_t>(prev, cur, next, dst, edeint, field, 0, env); break;
         default: filter<float>(prev, cur, next, dst, edeint, field, 0, env); break;
+    }
+
+    if (has_at_least_v8)
+    {
+        env->copyFrameProps(cur, dst);
+        env->propSetInt(env->getFramePropsRW(dst), "_FieldBased", 0, 0);
     }
 
     return dst;
