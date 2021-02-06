@@ -37,3 +37,28 @@ BWDIF (clip, int "field", clip "edeint", int "opt")
     2: Use AVX2 code.\
     3: Use AVX512 code.\
     Default: -1.
+    
+# Building
+
+## Windows
+
+Use solution files.
+
+## Linux
+
+### Requirements
+
+- Git
+- C++17 compiler
+- CMake >= 3.8
+
+```
+git clone https://github.com/Asd-g/AviSynth-BWDIF && \
+cd AviSynth-BWDIF && \
+mkdir build && \
+cd build && \
+
+cmake ..
+make -j$(nproc)
+sudo make install
+```
