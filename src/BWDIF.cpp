@@ -492,10 +492,12 @@ PVideoFrame __stdcall BWDIF::GetFrame(int n, IScriptEnvironment* env)
 
 AVSValue __cdecl Create_BWDIF(AVSValue args, void* user_data, IScriptEnvironment* env)
 {
+    auto edeint = (args[2].Defined()) ? args[2].AsClip() : nullptr;
+
     return new BWDIF(
         args[0].AsClip(),
         args[1].AsInt(-1),
-        args[2].AsClip(),
+        edeint,
         args[3].AsInt(-1),
         env);
 }

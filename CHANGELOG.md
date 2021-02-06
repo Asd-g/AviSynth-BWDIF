@@ -1,3 +1,6 @@
+##### 1.2.1:
+    Set frame property _FieldBased to 0.
+
 ##### 1.2.0:
     Added parameter edeint.
 
