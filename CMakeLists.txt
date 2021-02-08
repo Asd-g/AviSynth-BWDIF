@@ -1,10 +1,6 @@
-cmake_minimum_required(VERSION 3.8)
+cmake_minimum_required(VERSION 3.16)
 
-set(ProjectName "BWDIF")
-
-project(${ProjectName} LANGUAGES CXX)
-
-string(TOLOWER "${ProjectName}" LibName)
+project(libbwdif LANGUAGES CXX)
 
 find_package (Git)
 
@@ -17,37 +13,33 @@ else ()
     message (STATUS "GIT not found")
 endif ()
 
-find_path(AVS_FOUND avisynth.h HINTS /usr/include /usr/local/include PATH_SUFFIXES avisynth)
-if (NOT AVS_FOUND)
-    message(FATAL_ERROR "AviSynth+ not found.")
-else()
-    message(STATUS "AviSynth+ : ${AVS_FOUND}")
+add_library(bwdif SHARED
+    src/BWDIF.cpp
+    src/BWDIF_avx2.cpp
+    src/BWDIF_avx512.cpp
+    src/BWDIF_sse2.cpp
+)
+
+if (NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "" FORCE)
 endif()
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -fPIC -std=c++17 -I${AVS_FOUND} ")
+message(STATUS "Build type - ${CMAKE_BUILD_TYPE}")
 
-# include_directories("include/")
+set_source_files_properties(src/BWDIF_sse2.cpp PROPERTIES COMPILE_OPTIONS "-mfpmath=sse;-msse2")
+set_source_files_properties(src/BWDIF_avx2.cpp PROPERTIES COMPILE_OPTIONS "-mavx2;-mfma")
+set_source_files_properties(src/BWDIF_avx512.cpp PROPERTIES COMPILE_OPTIONS "-mavx512f;-mavx512bw;-mavx512dq;-mavx512vl;-mfma")
 
-file(GLOB SOURCES "src/*.cpp")
+target_include_directories(bwdif PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    /usr/local/include/avisynth
+)
 
-# special SSE2 option for source files with *_sse2.cpp pattern
-file(GLOB_RECURSE SRCS_SSE2 "src/*_sse2.cpp")
-set_source_files_properties(${SRCS_SSE2} PROPERTIES COMPILE_FLAGS " -mfpmath=sse -msse2 ")
-
-# special SSSE3 option for source files with *_sse3.cpp pattern
-file(GLOB_RECURSE SRCS_AVX2 "src/*_avx2.cpp")
-set_source_files_properties(${SRCS_AVX2} PROPERTIES COMPILE_FLAGS " -mavx2 -mfma ")
-
-# special AVX2 option for source files with *_avx2.cpp pattern
-file(GLOB_RECURSE SRCS_AVX512 "src/*_avx512.cpp")
-set_source_files_properties(${SRCS_AVX512} PROPERTIES COMPILE_FLAGS " -mavx512f -mavx512bw -mavx512dq -mavx512vl -mfma ")
-
-add_library("${LibName}" SHARED ${SOURCES})
-set_target_properties("${LibName}" PROPERTIES OUTPUT_NAME "${LibName}.${ver}")
+set_target_properties(bwdif PROPERTIES OUTPUT_NAME "bwdif.${ver}")
 
 include(GNUInstallDirs)
 
-INSTALL(TARGETS ${LibName}
+INSTALL(TARGETS bwdif
         LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}/avisynth")
         
 # uninstall target
