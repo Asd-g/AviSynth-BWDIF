@@ -37,6 +37,8 @@ target_include_directories(bwdif PRIVATE
 
 set_target_properties(bwdif PROPERTIES OUTPUT_NAME "bwdif.${ver}")
 
+target_compile_features(bwdif PRIVATE cxx_std_17)
+
 include(GNUInstallDirs)
 
 INSTALL(TARGETS bwdif
