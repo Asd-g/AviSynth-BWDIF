@@ -1,16 +1,22 @@
-# Description
+## Description
 
 Motion adaptive deinterlacing based on yadif with the use of w3fdif and cubic interpolation algorithms.
 
 This is [a port of the VapourSynth plugin Bwdif](https://github.com/HomeOfVapourSynthEvolution/VapourSynth-Bwdif).
 
-# Usage
+### Requirements:
+
+- AviSynth 2.60 / AviSynth+ 3.4 or later
+
+- Microsoft VisualC++ Redistributable Package 2022 (can be downloaded from [here](https://github.com/abbodi1406/vcredist/releases)) (Windows only)
+
+### Usage:
 
 ```
 BWDIF (clip, int "field", clip "edeint", int "opt")
 ```
 
-## Parameters:
+### Parameters:
 
 - clip\
     A clip to process. All planar formats are supported.
@@ -38,27 +44,25 @@ BWDIF (clip, int "field", clip "edeint", int "opt")
     3: Use AVX512 code.\
     Default: -1.
     
-# Building
+### Building:
 
-## Windows
+- Windows\
+    Use solution files.
 
-Use solution files.
-
-## Linux
-
-### Requirements
-
-- Git
-- C++17 compiler
-- CMake >= 3.16
-
-```
-git clone https://github.com/Asd-g/AviSynth-BWDIF && \
-cd AviSynth-BWDIF && \
-mkdir build && \
-cd build && \
-
-cmake ..
-make -j$(nproc)
-sudo make install
-```
+- Linux\
+    ```
+    Requirements:
+        - Git
+        - C++17 compiler
+        - CMake >= 3.16
+    ```
+    ```
+    git clone https://github.com/Asd-g/AviSynth-BWDIF && \
+    cd AviSynth-BWDIF && \
+    mkdir build && \
+    cd build && \
+    
+    cmake ..
+    make -j$(nproc)
+    sudo make install
+    ```
