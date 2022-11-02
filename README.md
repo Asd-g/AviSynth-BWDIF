@@ -13,14 +13,14 @@ This is [a port of the VapourSynth plugin Bwdif](https://github.com/HomeOfVapour
 ### Usage:
 
 ```
-BWDIF (clip, int "field", clip "edeint", int "opt")
+BWDIF (clip, int "field", clip "edeint", int "opt", float "thr")
 ```
 
 ### Parameters:
 
 - clip\
     A clip to process. All planar formats are supported.
-    
+
 - field\
     Controls the mode of operation (double vs same rate) and which field is kept.\
     -2: Double rate (alternates each frame), AviSynth internal order.\
@@ -30,11 +30,11 @@ BWDIF (clip, int "field", clip "edeint", int "opt")
     2: Double rate (alternates each frame), starts with bottom.\
     3: Double rate (alternates each frame), starts with top.\
     Default: -1.
-    
+
 - edeint\
     Clip from which to take spatial predictions. This clip must be the same width, height, and colorspace as the input clip.\
     If using same rate output, this clip should have the same number of frames as the input. If using double rate output, this clip should have twice as many frames as the input.
-    
+
 - opt\
     Sets which cpu optimizations to use.\
     -1: Auto-detect.\
@@ -43,7 +43,13 @@ BWDIF (clip, int "field", clip "edeint", int "opt")
     2: Use AVX2 code.\
     3: Use AVX512 code.\
     Default: -1.
-    
+
+- thr\
+    Threshold for interpolation.\
+    If the difference between pixels of the prev/next frame is less than or equal to this, the resulted pixel wouldn't be interpolated.
+    Must be between 0.0..1.0.
+    Default: 0.0.
+
 ### Building:
 
 - Windows\
@@ -61,7 +67,7 @@ BWDIF (clip, int "field", clip "edeint", int "opt")
     cd AviSynth-BWDIF && \
     mkdir build && \
     cd build && \
-    
+
     cmake ..
     make -j$(nproc)
     sudo make install

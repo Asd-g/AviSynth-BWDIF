@@ -4,7 +4,8 @@
 #include "BWDIF.h"
 
 template<typename pixel_t, bool spat>
-static inline void filterEdge_c(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride, const int stride2, const int step, const int peak) noexcept
+static inline void filterEdge_c(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride, const int stride2,
+    const int step, const int peak, float threshold) noexcept
 {
     const pixel_t* prev2 = reinterpret_cast<const pixel_t*>(_prev2);
     const pixel_t* prev = reinterpret_cast<const pixel_t*>(_prev);
@@ -25,6 +26,9 @@ static inline void filterEdge_c(const void* _prev2, const void* _prev, const voi
     const pixel_t* next2Above2 = next2 - stride2;
     const pixel_t* next2Below2 = next2 + stride2;
 
+    if (std::is_integral_v<pixel_t>)
+        threshold *= peak;
+
     for (int x = 0; x < width; x++)
     {
         if constexpr (std::is_integral_v<pixel_t>)
@@ -37,7 +41,7 @@ static inline void filterEdge_c(const void* _prev2, const void* _prev, const voi
             const int temporal_diff2 = (std::abs(nextAbove[x] - c) + std::abs(nextBelow[x] - e)) >> 1;
             int diff = std::max({ temporal_diff0 >> 1, temporal_diff1, temporal_diff2 });
 
-            if (!diff)
+            if (diff <= threshold)
                 dst[x] = d;
             else
             {
@@ -66,7 +70,7 @@ static inline void filterEdge_c(const void* _prev2, const void* _prev, const voi
             const float temporal_diff2 = (std::abs(nextAbove[x] - c) + std::abs(nextBelow[x] - e)) * 0.5f;
             float diff = std::max({ temporal_diff0 * 0.5f, temporal_diff1, temporal_diff2 });
 
-            if (!diff)
+            if (diff <= threshold)
                 dst[x] = d;
             else
             {
@@ -88,7 +92,8 @@ static inline void filterEdge_c(const void* _prev2, const void* _prev, const voi
 }
 
 template<typename pixel_t>
-static inline void filterLine_c(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int stride, const int stride2, const int stride3, const int stride4, const int step, const int peak) noexcept
+static inline void filterLine_c(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int stride, const int stride2, const int stride3,
+    const int stride4, const int step, const int peak, float threshold) noexcept
 {
     const pixel_t* prev2 = reinterpret_cast<const pixel_t*>(_prev2);
     const pixel_t* prev = reinterpret_cast<const pixel_t*>(_prev);
@@ -96,7 +101,7 @@ static inline void filterLine_c(const void* _prev2, const void* _prev, const voi
     const pixel_t* edeint = reinterpret_cast<const pixel_t*>(edeint_);
     const pixel_t* next = reinterpret_cast<const pixel_t*>(_next);
     const pixel_t* next2 = reinterpret_cast<const pixel_t*>(_next2);
-    
+
     pixel_t* __restrict dst = reinterpret_cast<pixel_t*>(_dst);
 
     const pixel_t* prev2Above4 = prev2 - stride4;
@@ -116,6 +121,9 @@ static inline void filterLine_c(const void* _prev2, const void* _prev, const voi
     const pixel_t* next2Below2 = next2 + stride2;
     const pixel_t* next2Below4 = next2 + stride4;
 
+    if (std::is_integral_v<pixel_t>)
+        threshold *= peak;
+
     for (int x = 0; x < width; x++)
     {
         if constexpr (std::is_integral_v<pixel_t>)
@@ -128,7 +136,7 @@ static inline void filterLine_c(const void* _prev2, const void* _prev, const voi
             const int temporal_diff2 = (std::abs(nextAbove[x] - c) + std::abs(nextBelow[x] - e)) >> 1;
             int diff = std::max({ temporal_diff0 >> 1, temporal_diff1, temporal_diff2 });
 
-            if (!diff)
+            if (diff <= threshold)
                 dst[x] = d;
             else
             {
@@ -159,7 +167,8 @@ static inline void filterLine_c(const void* _prev2, const void* _prev, const voi
                 dst[x] = std::clamp(interpol, 0, peak);
             }
         }
-        else {
+        else
+        {
             const float c = curAbove[x];
             const float d = (prev2[x] + next2[x]) * 0.5f;
             const float e = curBelow[x];
@@ -168,7 +177,7 @@ static inline void filterLine_c(const void* _prev2, const void* _prev, const voi
             const float temporal_diff2 = (std::abs(nextAbove[x] - c) + std::abs(nextBelow[x] - e)) * 0.5f;
             float diff = std::max({ temporal_diff0 * 0.5f, temporal_diff1, temporal_diff2 });
 
-            if (!diff)
+            if (diff <= threshold)
                 dst[x] = d;
             else
             {
@@ -200,17 +209,21 @@ class BWDIF : public GenericVideoFilter
     int field_;
     PClip edeint_;
     int opt_;
+    float thr_;
     int edgeStep, lineStep, peak;
     bool has_at_least_v8;
 
-    void (*filterEdgeWithSpat)(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint, const int width, const int positiveStride, const int negativeStride, const int stride2, const int step, const int peak) noexcept;
-    void (*filterEdgeWithoutSpat)(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint, const int width, const int positiveStride, const int negativeStride, const int stride2, const int step, const int peak) noexcept;
-    void (*filterLine)(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint, const int width, const int stride, const int stride2, const int stride3, const int stride4, const int step, const int peak) noexcept;
+    void (*filterEdgeWithSpat)(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint, const int width, const int positiveStride, const int negativeStride, const int stride2,
+        const int step, const int peak, float threshold) noexcept;
+    void (*filterEdgeWithoutSpat)(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint, const int width, const int positiveStride, const int negativeStride, const int stride2,
+        const int step, const int peak, float threshold) noexcept;
+    void (*filterLine)(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint, const int width, const int stride, const int stride2, const int stride3, const int stride4,
+        const int step, const int peak, float threshold) noexcept;
     template<typename pixel_t>
     void filter(PVideoFrame& prevFrame, PVideoFrame& curFrame, PVideoFrame& nextFrame, PVideoFrame& dstFrame, PVideoFrame& edeint, const int field, const BWDIF* const __restrict, IScriptEnvironment* env) noexcept;
 
 public:
-    BWDIF(PClip _child, int field, PClip edeint, int opt, IScriptEnvironment* env);
+    BWDIF(PClip _child, int field, PClip edeint, int opt, float thr, IScriptEnvironment* env);
     PVideoFrame __stdcall GetFrame(int n, IScriptEnvironment* env);
     int __stdcall SetCacheHints(int cachehints, int frame_range)
     {
@@ -259,18 +272,18 @@ void BWDIF::filter(PVideoFrame& prevFrame, PVideoFrame& curFrame, PVideoFrame& n
                         y + 1 < height ? stride : -stride,
                         y > 0 ? -stride : stride,
                         stride * 2,
-                        edgeStep, peak);
+                        edgeStep, peak, thr_);
                 else
                     filterEdgeWithSpat(prev2, prev, cur, next, next2, dst, edeint, width,
                         y + 1 < height ? stride : -stride,
                         y > 0 ? -stride : stride,
                         stride * 2,
-                        edgeStep, peak);
+                        edgeStep, peak, thr_);
             }
             else {
                 filterLine(prev2, prev, cur, next, next2, dst, edeint, width,
                     stride, stride * 2, stride * 3, stride * 4,
-                    lineStep, peak);
+                    lineStep, peak, thr_);
             }
 
             prev2 += stride * static_cast<int64_t>(2);
@@ -284,8 +297,8 @@ void BWDIF::filter(PVideoFrame& prevFrame, PVideoFrame& curFrame, PVideoFrame& n
     }
 }
 
-BWDIF::BWDIF(PClip _child, int field, PClip edeint, int opt, IScriptEnvironment* env)
-    : GenericVideoFilter(_child), field_(field), edeint_(edeint), opt_(opt)
+BWDIF::BWDIF(PClip _child, int field, PClip edeint, int opt, float thr, IScriptEnvironment* env)
+    : GenericVideoFilter(_child), field_(field), edeint_(edeint), opt_(opt), thr_(thr)
 {
     if (!vi.IsPlanar())
         env->ThrowError("BWDIF: only planar formats are supported.");
@@ -301,6 +314,8 @@ BWDIF::BWDIF(PClip _child, int field, PClip edeint, int opt, IScriptEnvironment*
         env->ThrowError("BWDIF: opt=2 requires AVX2.");
     if (!(env->GetCPUFlags() & CPUF_SSE2) && opt_ == 1)
         env->ThrowError("BWDIF: opt=1 requires SSE2.");
+    if (thr_ < 0.0f || thr_ > 1.0f)
+        env->ThrowError("BWDIF: thr must be between 0.0..1.0.");
 
     if (edeint_)
     {
@@ -440,7 +455,7 @@ BWDIF::BWDIF(PClip _child, int field, PClip edeint, int opt, IScriptEnvironment*
         }
     }
 
-    if (field_ == - 2 || field_ > 1)
+    if (field_ == -2 || field_ > 1)
     {
         vi.num_frames *= 2;
         vi.fps_numerator *= 2;
@@ -472,7 +487,7 @@ PVideoFrame __stdcall BWDIF::GetFrame(int n, IScriptEnvironment* env)
     PVideoFrame prev = child->GetFrame(std::max(n - 1, 0), env);
     PVideoFrame cur = child->GetFrame(n, env);
     PVideoFrame next = child->GetFrame(std::min(n + 1, vi.num_frames - 1), env);
-    PVideoFrame dst = env->NewVideoFrame(vi);    
+    PVideoFrame dst = env->NewVideoFrame(vi);
 
     switch (vi.ComponentSize())
     {
@@ -499,6 +514,7 @@ AVSValue __cdecl Create_BWDIF(AVSValue args, void* user_data, IScriptEnvironment
         args[1].AsInt(-1),
         edeint,
         args[3].AsInt(-1),
+        args[4].AsFloatf(0.0f),
         env);
 }
 
@@ -509,7 +525,7 @@ const char* __stdcall AvisynthPluginInit3(IScriptEnvironment * env, const AVS_Li
 {
     AVS_linkage = vectors;
 
-    env->AddFunction("BWDIF", "c[field]i[edeint]c[opt]i", Create_BWDIF, 0);
+    env->AddFunction("BWDIF", "c[field]i[edeint]c[opt]i[thr]f", Create_BWDIF, 0);
 
     return "BWDIF";
 }
