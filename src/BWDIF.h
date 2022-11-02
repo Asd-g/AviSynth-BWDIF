@@ -18,23 +18,23 @@ static constexpr float coef_lf_f[2] = { 4309 / 8192.0f, 213 / 8192.0f };
 static constexpr float coef_hf_f[3] = { 5570 / 8192.0f, 3801 / 8192.0f, 1016 / 8192.0f };
 static constexpr float coef_sp_f[2] = { 5077 / 8192.0f, 981 / 8192.0f };
 
-template<typename pixel_t, bool spat>
+template<typename pixel_t, bool spat, int step, int peak>
 void filterEdge_sse2(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint, const int width, const int positiveStride, const int negativeStride, const int stride2,
-    const int step, const int peak, float threshold) noexcept;
-template<typename pixel_t>
+    float threshold) noexcept;
+template<typename pixel_t, int step, int peak>
 void filterLine_sse2(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint, const int width, const int stride, const int stride2, const int stride3, const int stride4,
-    const int step, const int peak, float threshold) noexcept;
+    float threshold) noexcept;
 
-template<typename pixel_t, bool spat>
+template<typename pixel_t, bool spat, int step, int peak>
 void filterEdge_avx2(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint, const int width, const int positiveStride, const int negativeStride, const int stride2,
-    const int step, const int peak, float threshold) noexcept;
-template<typename pixel_t>
+    float threshold) noexcept;
+template<typename pixel_t, int step, int peak>
 void filterLine_avx2(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint, const int width, const int stride, const int stride2, const int stride3, const int stride4,
-    const int step, const int peak, float threshold) noexcept;
+    float threshold) noexcept;
 
-template<typename pixel_t, bool spat>
+template<typename pixel_t, bool spat, int step, int peak>
 void filterEdge_avx512(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint, const int width, const int positiveStride, const int negativeStride, const int stride2,
-    const int step, const int peak, float threshold) noexcept;
-template<typename pixel_t>
+    float threshold) noexcept;
+template<typename pixel_t, int step, int peak>
 void filterLine_avx512(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint, const int width, const int stride, const int stride2, const int stride3, const int stride4,
-    const int step, const int peak, float threshold) noexcept;
+    float threshold) noexcept;

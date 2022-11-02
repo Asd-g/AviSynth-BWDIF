@@ -1,8 +1,8 @@
 #include "BWDIF.h"
 
-template<typename pixel_t, bool spat>
+template<typename pixel_t, bool spat, int step, int peak>
 void filterEdge_avx2(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride, const int stride2,
-    const int step, const int peak, float threshold) noexcept
+    float threshold) noexcept
 {
     const pixel_t* prev2 = reinterpret_cast<const pixel_t*>(_prev2);
     const pixel_t* prev = reinterpret_cast<const pixel_t*>(_prev);
@@ -110,9 +110,9 @@ void filterEdge_avx2(const void* _prev2, const void* _prev, const void* _cur, co
     }
 }
 
-template<typename pixel_t>
+template<typename pixel_t, int step, int peak>
 void filterLine_avx2(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int stride, const int stride2, const int stride3, const int stride4,
-    const int step, const int peak, float threshold) noexcept
+    float threshold) noexcept
 {
     const pixel_t* prev2 = reinterpret_cast<const pixel_t*>(_prev2);
     const pixel_t* prev = reinterpret_cast<const pixel_t*>(_prev);
@@ -235,22 +235,50 @@ void filterLine_avx2(const void* _prev2, const void* _prev, const void* _cur, co
     }
 }
 
-template void filterEdge_avx2<uint8_t, true>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
-    const int stride2, const int step, const int peak, float threshold) noexcept;
-template void filterEdge_avx2<uint8_t, false>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
-    const int stride2, const int step, const int peak, float threshold) noexcept;
-template void filterEdge_avx2<uint16_t, true>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
-    const int stride2, const int step, const int peak, float threshold) noexcept;
-template void filterEdge_avx2<uint16_t, false>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
-    const int stride2, const int step, const int peak, float threshold) noexcept;
-template void filterEdge_avx2<float, true>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
-    const int stride2, const int step, const int peak, float threshold) noexcept;
-template void filterEdge_avx2<float, false>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
-    const int stride2, const int step, const int peak, float threshold) noexcept;
+template void filterEdge_avx2<uint8_t, true, 16, 255>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
+    const int stride2, float threshold) noexcept;
+template void filterEdge_avx2<uint8_t, false, 16, 255>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
+    const int stride2, float threshold) noexcept;
 
-template void filterLine_avx2<uint8_t>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int stride, const int stride2, const int stride3,
-    const int stride4, const int step, const int peak, float threshold) noexcept;
-template void filterLine_avx2<uint16_t>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int stride, const int stride2, const int stride3,
-    const int stride4, const int step, const int peak, float threshold) noexcept;
-template void filterLine_avx2<float>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int stride, const int stride2, const int stride3,
-    const int stride4, const int step, const int peak, float threshold) noexcept;
+template void filterEdge_avx2<uint16_t, true, 8, 1023>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
+    const int stride2, float threshold) noexcept;
+template void filterEdge_avx2<uint16_t, false, 8, 1023>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
+    const int stride2, float threshold) noexcept;
+
+template void filterEdge_avx2<uint16_t, true, 8, 4095>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
+    const int stride2, float threshold) noexcept;
+template void filterEdge_avx2<uint16_t, false, 8, 4095>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
+    const int stride2, float threshold) noexcept;
+
+template void filterEdge_avx2<uint16_t, true, 8, 16383>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
+    const int stride2, float threshold) noexcept;
+template void filterEdge_avx2<uint16_t, false, 8, 16383>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
+    const int stride2, float threshold) noexcept;
+
+template void filterEdge_avx2<uint16_t, true, 8, 65535>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
+    const int stride2, float threshold) noexcept;
+template void filterEdge_avx2<uint16_t, false, 8, 65535>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
+    const int stride2, float threshold) noexcept;
+
+template void filterEdge_avx2<float, true, 8, 1>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
+    const int stride2, float threshold) noexcept;
+template void filterEdge_avx2<float, false, 8, 1>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
+    const int stride2, float threshold) noexcept;
+
+template void filterLine_avx2<uint8_t, 8, 255>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int stride, const int stride2, const int stride3,
+    const int stride4, float threshold) noexcept;
+
+template void filterLine_avx2<uint16_t, 8, 1023>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int stride, const int stride2, const int stride3,
+    const int stride4, float threshold) noexcept;
+
+template void filterLine_avx2<uint16_t, 8, 4095>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int stride, const int stride2, const int stride3,
+    const int stride4, float threshold) noexcept;
+
+template void filterLine_avx2<uint16_t, 8, 16383>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int stride, const int stride2, const int stride3,
+    const int stride4, float threshold) noexcept;
+
+template void filterLine_avx2<uint16_t, 8, 65535>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int stride, const int stride2, const int stride3,
+    const int stride4, float threshold) noexcept;
+
+template void filterLine_avx2<float, 8, 1>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int stride, const int stride2, const int stride3,
+    const int stride4, float threshold) noexcept;
