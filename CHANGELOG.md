@@ -1,3 +1,8 @@
+##### 1.2.2:
+    Added parameter `thr`.
+    Added parameter `debug`.
+    Added support to read frame property _FieldBased.
+
 ##### 1.2.1:
     Set frame property _FieldBased to 0.
 
