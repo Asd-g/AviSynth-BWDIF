@@ -4,7 +4,7 @@
 #include "BWDIF.h"
 #include "VCL2/instrset.h"
 
-template<typename pixel_t, bool spat, int step, int peak>
+template<typename pixel_t, bool spat, int step, int peak, bool debug>
 static inline void filterEdge_c(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride, const int stride2,
     float threshold) noexcept
 {
@@ -27,8 +27,8 @@ static inline void filterEdge_c(const void* _prev2, const void* _prev, const voi
     const pixel_t* next2Above2 = next2 - stride2;
     const pixel_t* next2Below2 = next2 + stride2;
 
-    if (std::is_integral_v<pixel_t>)
-        threshold *= peak;
+    typedef typename std::conditional<sizeof(pixel_t) == 4, float, int>::type thresh;
+    const thresh thr = (std::is_integral_v<pixel_t>) ? static_cast<int>(threshold) : threshold;
 
     for (int x = 0; x < width; x++)
     {
@@ -42,23 +42,32 @@ static inline void filterEdge_c(const void* _prev2, const void* _prev, const voi
             const int temporal_diff2 = (std::abs(nextAbove[x] - c) + std::abs(nextBelow[x] - e)) >> 1;
             int diff = std::max({ temporal_diff0 >> 1, temporal_diff1, temporal_diff2 });
 
-            if (diff <= threshold)
-                dst[x] = d;
+            if (diff <= thr)
+            {
+                if constexpr (debug)
+                    dst[x] = 0;
+                else
+                    dst[x] = d;
+            }
             else
             {
-                if constexpr (spat)
+                if constexpr (debug)
+                    dst[x] = peak;
+                else
                 {
-                    const int b = ((prev2Above2[x] + next2Above2[x]) >> 1) - c;
-                    const int f = ((prev2Below2[x] + next2Below2[x]) >> 1) - e;
-                    const int dc = d - c;
-                    const int de = d - e;
-                    const int maximum = std::max({ de, dc, std::min(b, f) });
-                    const int minimum = std::min({ de, dc, std::max(b, f) });
-                    diff = std::max({ diff, minimum, -maximum });
-                }
+                    if constexpr (spat)
+                    {
+                        const int b = ((prev2Above2[x] + next2Above2[x]) >> 1) - c;
+                        const int f = ((prev2Below2[x] + next2Below2[x]) >> 1) - e;
+                        const int dc = d - c;
+                        const int de = d - e;
+                        const int maximum = std::max({ de, dc, std::min(b, f) });
+                        const int minimum = std::min({ de, dc, std::max(b, f) });
+                        diff = std::max({ diff, minimum, -maximum });
+                    }
 
-                int interpol = std::clamp(!edeint ? (c + e) >> 1 : static_cast<int>(edeint[x]), d - diff, d + diff);
-                dst[x] = std::clamp(interpol, 0, peak);
+                    dst[x] = std::clamp(std::clamp(!edeint ? (c + e) >> 1 : static_cast<int>(edeint[x]), d - diff, d + diff), 0, peak);
+                }
             }
         }
         else
@@ -71,28 +80,38 @@ static inline void filterEdge_c(const void* _prev2, const void* _prev, const voi
             const float temporal_diff2 = (std::abs(nextAbove[x] - c) + std::abs(nextBelow[x] - e)) * 0.5f;
             float diff = std::max({ temporal_diff0 * 0.5f, temporal_diff1, temporal_diff2 });
 
-            if (diff <= threshold)
-                dst[x] = d;
+            if (diff <= thr)
+            {
+                if constexpr (debug)
+                    dst[x] = 0.0f;
+                else
+                    dst[x] = d;
+            }
             else
             {
-                if constexpr (spat)
+                if constexpr (debug)
+                    dst[x] = 1.0f;
+                else
                 {
-                    const float b = ((prev2Above2[x] + next2Above2[x]) * 0.5f) - c;
-                    const float f = ((prev2Below2[x] + next2Below2[x]) * 0.5f) - e;
-                    const float dc = d - c;
-                    const float de = d - e;
-                    const float maximum = std::max({ de, dc, std::min(b, f) });
-                    const float minimum = std::min({ de, dc, std::max(b, f) });
-                    diff = std::max({ diff, minimum, -maximum });
-                }
+                    if constexpr (spat)
+                    {
+                        const float b = ((prev2Above2[x] + next2Above2[x]) * 0.5f) - c;
+                        const float f = ((prev2Below2[x] + next2Below2[x]) * 0.5f) - e;
+                        const float dc = d - c;
+                        const float de = d - e;
+                        const float maximum = std::max({ de, dc, std::min(b, f) });
+                        const float minimum = std::min({ de, dc, std::max(b, f) });
+                        diff = std::max({ diff, minimum, -maximum });
+                    }
 
-                dst[x] = std::clamp(!edeint ? (c + e) * 0.5f : edeint[x], d - diff, d + diff);
+                    dst[x] = std::clamp(!edeint ? (c + e) * 0.5f : edeint[x], d - diff, d + diff);
+                }
             }
         }
     }
 }
 
-template<typename pixel_t, int step, int peak>
+template<typename pixel_t, int step, int peak, bool debug>
 static inline void filterLine_c(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int stride, const int stride2, const int stride3,
     const int stride4, float threshold) noexcept
 {
@@ -122,8 +141,8 @@ static inline void filterLine_c(const void* _prev2, const void* _prev, const voi
     const pixel_t* next2Below2 = next2 + stride2;
     const pixel_t* next2Below4 = next2 + stride4;
 
-    if (std::is_integral_v<pixel_t>)
-        threshold *= peak;
+    typedef typename std::conditional<sizeof(pixel_t) == 4, float, int>::type thresh;
+    const thresh thr = (std::is_integral_v<pixel_t>) ? static_cast<int>(threshold) : threshold;
 
     for (int x = 0; x < width; x++)
     {
@@ -137,35 +156,45 @@ static inline void filterLine_c(const void* _prev2, const void* _prev, const voi
             const int temporal_diff2 = (std::abs(nextAbove[x] - c) + std::abs(nextBelow[x] - e)) >> 1;
             int diff = std::max({ temporal_diff0 >> 1, temporal_diff1, temporal_diff2 });
 
-            if (diff <= threshold)
-                dst[x] = d;
+            if (diff <= thr)
+            {
+                if constexpr (debug)
+                    dst[x] = 0;
+                else
+                    dst[x] = d;
+            }
             else
             {
-                const int b = ((prev2Above2[x] + next2Above2[x]) >> 1) - c;
-                const int f = ((prev2Below2[x] + next2Below2[x]) >> 1) - e;
-                const int dc = d - c;
-                const int de = d - e;
-                const int maximum = std::max({ de, dc, std::min(b, f) });
-                const int minimum = std::min({ de, dc, std::max(b, f) });
-                diff = std::max({ diff, minimum, -maximum });
-
-                int interpol;
-                if (!edeint)
-                {
-                    if (std::abs(c - e) > temporal_diff0)
-                        interpol = (((coef_hf[0] * (prev2[x] + next2[x])
-                            - coef_hf[1] * (prev2Above2[x] + next2Above2[x] + prev2Below2[x] + next2Below2[x])
-                            + coef_hf[2] * (prev2Above4[x] + next2Above4[x] + prev2Below4[x] + next2Below4[x])) >> 2)
-                            + coef_lf[0] * (c + e) - coef_lf[1] * (curAbove3[x] + curBelow3[x])) >> 13;
-                    else
-                        interpol = (coef_sp[0] * (c + e) - coef_sp[1] * (curAbove3[x] + curBelow3[x])) >> 13;
-
-                    interpol = std::clamp(interpol, d - diff, d + diff);
-                }
+                if constexpr (debug)
+                    dst[x] = peak;
                 else
-                    interpol = std::clamp(static_cast<int>(edeint[x]), d - diff, d + diff);
+                {
+                    const int b = ((prev2Above2[x] + next2Above2[x]) >> 1) - c;
+                    const int f = ((prev2Below2[x] + next2Below2[x]) >> 1) - e;
+                    const int dc = d - c;
+                    const int de = d - e;
+                    const int maximum = std::max({ de, dc, std::min(b, f) });
+                    const int minimum = std::min({ de, dc, std::max(b, f) });
+                    diff = std::max({ diff, minimum, -maximum });
 
-                dst[x] = std::clamp(interpol, 0, peak);
+                    const int interpol = [&]()
+                    {
+                        if (!edeint)
+                        {
+                            if (std::abs(c - e) > temporal_diff0)
+                                return std::clamp((((coef_hf[0] * (prev2[x] + next2[x])
+                                    - coef_hf[1] * (prev2Above2[x] + next2Above2[x] + prev2Below2[x] + next2Below2[x])
+                                    + coef_hf[2] * (prev2Above4[x] + next2Above4[x] + prev2Below4[x] + next2Below4[x])) >> 2)
+                                    + coef_lf[0] * (c + e) - coef_lf[1] * (curAbove3[x] + curBelow3[x])) >> 13, d - diff, d + diff);
+                            else
+                                return std::clamp((coef_sp[0] * (c + e) - coef_sp[1] * (curAbove3[x] + curBelow3[x])) >> 13, d - diff, d + diff);
+                        }
+                        else
+                            return std::clamp(static_cast<int>(edeint[x]), d - diff, d + diff);
+                    }();
+
+                    dst[x] = std::clamp(interpol, 0, peak);
+                }
             }
         }
         else
@@ -178,28 +207,34 @@ static inline void filterLine_c(const void* _prev2, const void* _prev, const voi
             const float temporal_diff2 = (std::abs(nextAbove[x] - c) + std::abs(nextBelow[x] - e)) * 0.5f;
             float diff = std::max({ temporal_diff0 * 0.5f, temporal_diff1, temporal_diff2 });
 
-            if (diff <= threshold)
-                dst[x] = d;
+            if (diff <= thr)
+            {
+                if constexpr (debug)
+                    dst[x] = 0.0f;
+                else
+                    dst[x] = d;
+            }
             else
             {
-                const float b = ((prev2Above2[x] + next2Above2[x]) * 0.5f) - c;
-                const float f = ((prev2Below2[x] + next2Below2[x]) * 0.5f) - e;
-                const float dc = d - c;
-                const float de = d - e;
-                const float maximum = std::max({ de, dc, std::min(b, f) });
-                const float minimum = std::min({ de, dc, std::max(b, f) });
-                diff = std::max({ diff, minimum, -maximum });
+                if constexpr (debug)
+                    dst[x] = 1.0f;
+                else
+                {
+                    const float b = ((prev2Above2[x] + next2Above2[x]) * 0.5f) - c;
+                    const float f = ((prev2Below2[x] + next2Below2[x]) * 0.5f) - e;
+                    const float dc = d - c;
+                    const float de = d - e;
+                    const float maximum = std::max({ de, dc, std::min(b, f) });
+                    const float minimum = std::min({ de, dc, std::max(b, f) });
+                    diff = std::max({ diff, minimum, -maximum });
 
-                float interpol;
-                if (std::abs(c - e) > temporal_diff0)
-                    interpol = ((coef_hf_f[0] * (prev2[x] + next2[x])
+                    const float interpol = (std::abs(c - e) > temporal_diff0) ? ((coef_hf_f[0] * (prev2[x] + next2[x])
                         - coef_hf_f[1] * (prev2Above2[x] + next2Above2[x] + prev2Below2[x] + next2Below2[x])
                         + coef_hf_f[2] * (prev2Above4[x] + next2Above4[x] + prev2Below4[x] + next2Below4[x])) * 0.25f
-                        + coef_lf_f[0] * (c + e) - coef_lf_f[1] * (curAbove3[x] + curBelow3[x]));
-                else
-                    interpol = coef_sp_f[0] * (c + e) - coef_sp_f[1] * (curAbove3[x] + curBelow3[x]);
+                        + coef_lf_f[0] * (c + e) - coef_lf_f[1] * (curAbove3[x] + curBelow3[x])) : (coef_sp_f[0] * (c + e) - coef_sp_f[1] * (curAbove3[x] + curBelow3[x]));
 
-                dst[x] = std::clamp(!edeint ? interpol : edeint[x], d - diff, d + diff);
+                    dst[x] = std::clamp(!edeint ? interpol : edeint[x], d - diff, d + diff);
+                }
             }
         }
     }
@@ -224,9 +259,9 @@ class BWDIF : public GenericVideoFilter
     void filter(PVideoFrame& prevFrame, PVideoFrame& curFrame, PVideoFrame& nextFrame, PVideoFrame& dstFrame, PVideoFrame& edeint, const int field, const BWDIF* const __restrict, IScriptEnvironment* env) noexcept;
 
 public:
-    BWDIF(PClip _child, int field, PClip edeint, int opt, float thr, IScriptEnvironment* env);
-    PVideoFrame __stdcall GetFrame(int n, IScriptEnvironment* env);
-    int __stdcall SetCacheHints(int cachehints, int frame_range)
+    BWDIF(PClip _child, int field, PClip edeint, int opt, float thr, bool debug, IScriptEnvironment* env);
+    PVideoFrame __stdcall GetFrame(int n, IScriptEnvironment* env) override;
+    int __stdcall SetCacheHints(int cachehints, int frame_range) override
     {
         return cachehints == CACHE_GET_MTMODE ? MT_NICE_FILTER : 0;
     }
@@ -235,27 +270,25 @@ public:
 template<typename pixel_t>
 void BWDIF::filter(PVideoFrame& prevFrame, PVideoFrame& curFrame, PVideoFrame& nextFrame, PVideoFrame& dstFrame, PVideoFrame& edeintFrame, const int field, const BWDIF* const __restrict, IScriptEnvironment* env) noexcept
 {
-    int planes_y[4] = { PLANAR_Y, PLANAR_U, PLANAR_V, PLANAR_A };
-    int planes_r[4] = { PLANAR_G, PLANAR_B, PLANAR_R, PLANAR_A };
-    const int* current_planes = (vi.IsYUV() || vi.IsYUVA()) ? planes_y : planes_r;
+    int planes_y[3] = { PLANAR_Y, PLANAR_U, PLANAR_V };
+    int planes_r[3] = { PLANAR_G, PLANAR_B, PLANAR_R };
+    const int* current_planes = (!vi.IsRGB()) ? planes_y : planes_r;
     const int planecount = std::min(vi.NumComponents(), 3);
     for (int i = 0; i < planecount; i++)
     {
-        const int plane = current_planes[i];
+        const int stride = curFrame->GetPitch(current_planes[i]) / sizeof(pixel_t);
+        const int edeint_stride = edeintFrame ? edeintFrame->GetPitch(current_planes[i]) / sizeof(pixel_t) : 0;
+        const int dst_stride = dstFrame->GetPitch(current_planes[i]) / sizeof(pixel_t);
+        const int width = curFrame->GetRowSize(current_planes[i]) / sizeof(pixel_t);
+        const int height = curFrame->GetHeight(current_planes[i]);
+        const pixel_t* prev = reinterpret_cast<const pixel_t*>(prevFrame->GetReadPtr(current_planes[i]));
+        const pixel_t* cur = reinterpret_cast<const pixel_t*>(curFrame->GetReadPtr(current_planes[i]));
+        const pixel_t* next = reinterpret_cast<const pixel_t*>(nextFrame->GetReadPtr(current_planes[i]));
+        const pixel_t* edeint = edeintFrame ? reinterpret_cast<const pixel_t*>(edeintFrame->GetReadPtr(current_planes[i])) : 0;
+        pixel_t* __restrict dst = reinterpret_cast<pixel_t*>(dstFrame->GetWritePtr(current_planes[i]));
 
-        const int stride = curFrame->GetPitch(plane) / sizeof(pixel_t);
-        const int edeint_stride = edeintFrame ? edeintFrame->GetPitch(plane) / sizeof(pixel_t) : 0;
-        const int dst_stride = dstFrame->GetPitch(plane) / sizeof(pixel_t);
-        const int width = curFrame->GetRowSize(plane) / sizeof(pixel_t);
-        const int height = curFrame->GetHeight(plane);
-        const pixel_t* prev = reinterpret_cast<const pixel_t*>(prevFrame->GetReadPtr(plane));
-        const pixel_t* cur = reinterpret_cast<const pixel_t*>(curFrame->GetReadPtr(plane));
-        const pixel_t* next = reinterpret_cast<const pixel_t*>(nextFrame->GetReadPtr(plane));
-        const pixel_t* edeint = edeintFrame ? reinterpret_cast<const pixel_t*>(edeintFrame->GetReadPtr(plane)) : 0;
-        pixel_t* __restrict dst = reinterpret_cast<pixel_t*>(dstFrame->GetWritePtr(plane));
-
-        env->BitBlt(dstFrame->GetWritePtr(plane) + dstFrame->GetPitch(plane) * (static_cast<int64_t>(1) - field), dstFrame->GetPitch(plane) * 2, curFrame->GetReadPtr(plane) + curFrame->GetPitch(plane) * (static_cast<int64_t>(1) - field), curFrame->GetPitch(plane) * 2,
-            curFrame->GetRowSize(plane), height / 2);
+        env->BitBlt(dstFrame->GetWritePtr(current_planes[i]) + dstFrame->GetPitch(current_planes[i]) * (static_cast<int64_t>(1) - field), dstFrame->GetPitch(current_planes[i]) * 2,
+            curFrame->GetReadPtr(current_planes[i]) + curFrame->GetPitch(current_planes[i]) * (static_cast<int64_t>(1) - field), curFrame->GetPitch(current_planes[i]) * 2, curFrame->GetRowSize(current_planes[i]), height / 2);
 
         prev += static_cast<int64_t>(stride) * field;
         cur += static_cast<int64_t>(stride) * field;
@@ -266,8 +299,10 @@ void BWDIF::filter(PVideoFrame& prevFrame, PVideoFrame& curFrame, PVideoFrame& n
         const pixel_t* prev2 = field ? prev : cur;
         const pixel_t* next2 = field ? cur : next;
 
-        for (int y = field; y < height; y += 2) {
-            if ((y < 4) || (y + 5 > height)) {
+        for (int y = field; y < height; y += 2)
+        {
+            if ((y < 4) || (y + 5 > height))
+            {
                 if ((y < 2) || (y + 3 > height))
                     filterEdgeWithoutSpat(prev2, prev, cur, next, next2, dst, edeint, width,
                         y + 1 < height ? stride : -stride,
@@ -279,7 +314,8 @@ void BWDIF::filter(PVideoFrame& prevFrame, PVideoFrame& curFrame, PVideoFrame& n
                         y > 0 ? -stride : stride,
                         stride * 2, thr_);
             }
-            else {
+            else
+            {
                 filterLine(prev2, prev, cur, next, next2, dst, edeint, width,
                     stride, stride * 2, stride * 3, stride * 4, thr_);
             }
@@ -295,7 +331,7 @@ void BWDIF::filter(PVideoFrame& prevFrame, PVideoFrame& curFrame, PVideoFrame& n
     }
 }
 
-BWDIF::BWDIF(PClip _child, int field, PClip edeint, int opt, float thr, IScriptEnvironment* env)
+BWDIF::BWDIF(PClip _child, int field, PClip edeint, int opt, float thr, bool debug, IScriptEnvironment* env)
     : GenericVideoFilter(_child), field_(field), edeint_(edeint), opt_(opt), thr_(thr)
 {
     if (!vi.IsPlanar())
@@ -315,8 +351,10 @@ BWDIF::BWDIF(PClip _child, int field, PClip edeint, int opt, float thr, IScriptE
     if (opt == 3 && iset < 10)
         env->ThrowError("BWDIF: opt=3 requires AVX512F.");
 
-    if (thr_ < 0.0f || thr_ > 1.0f)
-        env->ThrowError("BWDIF: thr must be between 0.0..1.0.");
+    if (thr_ < 0.0f || thr_ > 100.0f)
+        env->ThrowError("BWDIF: thr must be between 0.0..100.0.");
+
+    thr_ = (vi.ComponentSize() < 4) ? (thr_ * ((1 << vi.BitsPerComponent()) - 1) / 100.0f + 0.5f) : (thr_ / 100.0f);
 
     if (edeint_)
     {
@@ -336,9 +374,9 @@ BWDIF::BWDIF(PClip _child, int field, PClip edeint, int opt, float thr, IScriptE
         {
             case 1:
             {
-                filterEdgeWithSpat = filterEdge_avx512<uint8_t, true, 32, 255>;
-                filterEdgeWithoutSpat = filterEdge_avx512<uint8_t, false, 32, 255>;
-                filterLine = filterLine_avx512<uint8_t, 16, 255>;
+                filterEdgeWithSpat = (debug) ? filterEdge_avx512<uint8_t, true, 32, 255, true> : filterEdge_avx512<uint8_t, true, 32, 255, false>;
+                filterEdgeWithoutSpat = (debug) ? filterEdge_avx512<uint8_t, false, 32, 255, true> : filterEdge_avx512<uint8_t, false, 32, 255, false>;
+                filterLine = (debug) ? filterLine_avx512<uint8_t, 16, 255, true> : filterLine_avx512<uint8_t, 16, 255, false>;
             }
             break;
             case 2:
@@ -347,30 +385,30 @@ BWDIF::BWDIF(PClip _child, int field, PClip edeint, int opt, float thr, IScriptE
                 {
                     case 10:
                     {
-                        filterEdgeWithSpat = filterEdge_avx512<uint16_t, true, 16, 1023>;
-                        filterEdgeWithoutSpat = filterEdge_avx512<uint16_t, false, 16, 1023>;
-                        filterLine = filterLine_avx512<uint16_t, 16, 1023>;
+                        filterEdgeWithSpat = (debug) ? filterEdge_avx512<uint16_t, true, 16, 1023, true> : filterEdge_avx512<uint16_t, true, 16, 1023, false>;
+                        filterEdgeWithoutSpat = (debug) ? filterEdge_avx512<uint16_t, false, 16, 1023, true> : filterEdge_avx512<uint16_t, false, 16, 1023, false>;
+                        filterLine = (debug) ? filterLine_avx512<uint16_t, 16, 1023, true> : filterLine_avx512<uint16_t, 16, 1023, false>;
                         break;
                     }
                     case 12:
                     {
-                        filterEdgeWithSpat = filterEdge_avx512<uint16_t, true, 16, 4095>;
-                        filterEdgeWithoutSpat = filterEdge_avx512<uint16_t, false, 16, 4095>;
-                        filterLine = filterLine_avx512<uint16_t, 16, 4095>;
+                        filterEdgeWithSpat = (debug) ? filterEdge_avx512<uint16_t, true, 16, 4095, true> : filterEdge_avx512<uint16_t, true, 16, 4095, false>;
+                        filterEdgeWithoutSpat = (debug) ? filterEdge_avx512<uint16_t, false, 16, 4095, true> : filterEdge_avx512<uint16_t, false, 16, 4095, false>;
+                        filterLine = (debug) ? filterLine_avx512<uint16_t, 16, 4095, true> : filterLine_avx512<uint16_t, 16, 4095, false>;
                         break;
                     }
                     case 14:
                     {
-                        filterEdgeWithSpat = filterEdge_avx512<uint16_t, true, 16, 16383>;
-                        filterEdgeWithoutSpat = filterEdge_avx512<uint16_t, false, 16, 16383>;
-                        filterLine = filterLine_avx512<uint16_t, 16, 16383>;
+                        filterEdgeWithSpat = (debug) ? filterEdge_avx512<uint16_t, true, 16, 16383, true> : filterEdge_avx512<uint16_t, true, 16, 16383, false>;
+                        filterEdgeWithoutSpat = (debug) ? filterEdge_avx512<uint16_t, false, 16, 16383, true> : filterEdge_avx512<uint16_t, false, 16, 16383, false>;
+                        filterLine = (debug) ? filterLine_avx512<uint16_t, 16, 16383, true> : filterLine_avx512<uint16_t, 16, 16383, false>;
                         break;
                     }
                     default:
                     {
-                        filterEdgeWithSpat = filterEdge_avx512<uint16_t, true, 16, 65535>;
-                        filterEdgeWithoutSpat = filterEdge_avx512<uint16_t, false, 16, 65535>;
-                        filterLine = filterLine_avx512<uint16_t, 16, 65535>;
+                        filterEdgeWithSpat = (debug) ? filterEdge_avx512<uint16_t, true, 16, 65535, true> : filterEdge_avx512<uint16_t, true, 16, 65535, false>;
+                        filterEdgeWithoutSpat = (debug) ? filterEdge_avx512<uint16_t, false, 16, 65535, true> : filterEdge_avx512<uint16_t, false, 16, 65535, false>;
+                        filterLine = (debug) ? filterLine_avx512<uint16_t, 16, 65535, true> : filterLine_avx512<uint16_t, 16, 65535, false>;
                         break;
                     }
                 }
@@ -378,9 +416,9 @@ BWDIF::BWDIF(PClip _child, int field, PClip edeint, int opt, float thr, IScriptE
             break;
             default:
             {
-                filterEdgeWithSpat = filterEdge_avx512<float, true, 16, 1>;
-                filterEdgeWithoutSpat = filterEdge_avx512<float, false, 16, 1>;
-                filterLine = filterLine_avx512<float, 16, 1>;
+                filterEdgeWithSpat = (debug) ? filterEdge_avx512<float, true, 16, 1, true> : filterEdge_avx512<float, true, 16, 1, false>;
+                filterEdgeWithoutSpat = (debug) ? filterEdge_avx512<float, false, 16, 1, true> : filterEdge_avx512<float, false, 16, 1, false>;
+                filterLine = (debug) ? filterLine_avx512<float, 16, 1, true> : filterLine_avx512<float, 16, 1, false>;
             }
             break;
         }
@@ -391,9 +429,9 @@ BWDIF::BWDIF(PClip _child, int field, PClip edeint, int opt, float thr, IScriptE
         {
             case 1:
             {
-                filterEdgeWithSpat = filterEdge_avx2<uint8_t, true, 16, 255>;
-                filterEdgeWithoutSpat = filterEdge_avx2<uint8_t, false, 16, 255>;
-                filterLine = filterLine_avx2<uint8_t, 8, 255>;
+                filterEdgeWithSpat = (debug) ? filterEdge_avx2<uint8_t, true, 16, 255, true> : filterEdge_avx2<uint8_t, true, 16, 255, false>;
+                filterEdgeWithoutSpat = (debug) ? filterEdge_avx2<uint8_t, false, 16, 255, true> : filterEdge_avx2<uint8_t, false, 16, 255, false>;
+                filterLine = (debug) ? filterLine_avx2<uint8_t, 8, 255, true> : filterLine_avx2<uint8_t, 8, 255, false>;
             }
             break;
             case 2:
@@ -402,30 +440,30 @@ BWDIF::BWDIF(PClip _child, int field, PClip edeint, int opt, float thr, IScriptE
                 {
                     case 10:
                     {
-                        filterEdgeWithSpat = filterEdge_avx2<uint16_t, true, 8, 1023>;
-                        filterEdgeWithoutSpat = filterEdge_avx2<uint16_t, false, 8, 1023>;
-                        filterLine = filterLine_avx2<uint16_t, 8, 1023>;
+                        filterEdgeWithSpat = (debug) ? filterEdge_avx2<uint16_t, true, 8, 1023, true> : filterEdge_avx2<uint16_t, true, 8, 1023, false>;
+                        filterEdgeWithoutSpat = (debug) ? filterEdge_avx2<uint16_t, false, 8, 1023, true> : filterEdge_avx2<uint16_t, false, 8, 1023, false>;
+                        filterLine = (debug) ? filterLine_avx2<uint16_t, 8, 1023, true> : filterLine_avx2<uint16_t, 8, 1023, false>;
                         break;
                     }
                     case 12:
                     {
-                        filterEdgeWithSpat = filterEdge_avx2<uint16_t, true, 8, 4095>;
-                        filterEdgeWithoutSpat = filterEdge_avx2<uint16_t, false, 8, 4095>;
-                        filterLine = filterLine_avx2<uint16_t, 8, 4095>;
+                        filterEdgeWithSpat = (debug) ? filterEdge_avx2<uint16_t, true, 8, 4095, true> : filterEdge_avx2<uint16_t, true, 8, 4095, false>;
+                        filterEdgeWithoutSpat = (debug) ? filterEdge_avx2<uint16_t, false, 8, 4095, true> : filterEdge_avx2<uint16_t, false, 8, 4095, false>;
+                        filterLine = (debug) ? filterLine_avx2<uint16_t, 8, 4095, true> : filterLine_avx2<uint16_t, 8, 4095, false>;
                         break;
                     }
                     case 14:
                     {
-                        filterEdgeWithSpat = filterEdge_avx2<uint16_t, true, 8, 16383>;
-                        filterEdgeWithoutSpat = filterEdge_avx2<uint16_t, false, 8, 16383>;
-                        filterLine = filterLine_avx2<uint16_t, 8, 16383>;
+                        filterEdgeWithSpat = (debug) ? filterEdge_avx2<uint16_t, true, 8, 16383, true> : filterEdge_avx2<uint16_t, true, 8, 16383, false>;
+                        filterEdgeWithoutSpat = (debug) ? filterEdge_avx2<uint16_t, false, 8, 16383, true> : filterEdge_avx2<uint16_t, false, 8, 16383, false>;
+                        filterLine = (debug) ? filterLine_avx2<uint16_t, 8, 16383, true> : filterLine_avx2<uint16_t, 8, 16383, false>;
                         break;
                     }
                     default:
                     {
-                        filterEdgeWithSpat = filterEdge_avx2<uint16_t, true, 8, 65535>;
-                        filterEdgeWithoutSpat = filterEdge_avx2<uint16_t, false, 8, 65535>;
-                        filterLine = filterLine_avx2<uint16_t, 8, 65535>;
+                        filterEdgeWithSpat = (debug) ? filterEdge_avx2<uint16_t, true, 8, 65535, true> : filterEdge_avx2<uint16_t, true, 8, 65535, false>;
+                        filterEdgeWithoutSpat = (debug) ? filterEdge_avx2<uint16_t, false, 8, 65535, true> : filterEdge_avx2<uint16_t, false, 8, 65535, false>;
+                        filterLine = (debug) ? filterLine_avx2<uint16_t, 8, 65535, true> : filterLine_avx2<uint16_t, 8, 65535, false>;
                         break;
                     }
                 }
@@ -433,9 +471,9 @@ BWDIF::BWDIF(PClip _child, int field, PClip edeint, int opt, float thr, IScriptE
             break;
             default:
             {
-                filterEdgeWithSpat = filterEdge_avx2<float, true, 8, 1>;
-                filterEdgeWithoutSpat = filterEdge_avx2<float, false, 8, 1>;
-                filterLine = filterLine_avx2<float, 8, 1>;
+                filterEdgeWithSpat = (debug) ? filterEdge_avx2<float, true, 8, 1, true> : filterEdge_avx2<float, true, 8, 1, false>;
+                filterEdgeWithoutSpat = (debug) ? filterEdge_avx2<float, false, 8, 1, true> : filterEdge_avx2<float, false, 8, 1, false>;
+                filterLine = (debug) ? filterLine_avx2<float, 8, 1, true> : filterLine_avx2<float, 8, 1, false>;
             }
             break;
         }
@@ -446,9 +484,9 @@ BWDIF::BWDIF(PClip _child, int field, PClip edeint, int opt, float thr, IScriptE
         {
             case 1:
             {
-                filterEdgeWithSpat = filterEdge_sse2<uint8_t, true, 8, 255>;
-                filterEdgeWithoutSpat = filterEdge_sse2<uint8_t, false, 8, 255>;
-                filterLine = filterLine_sse2<uint8_t, 4, 255>;
+                filterEdgeWithSpat = (debug) ? filterEdge_sse2<uint8_t, true, 8, 255, true> : filterEdge_sse2<uint8_t, true, 8, 255, false>;
+                filterEdgeWithoutSpat = (debug) ? filterEdge_sse2<uint8_t, false, 8, 255, true> : filterEdge_sse2<uint8_t, false, 8, 255, false>;
+                filterLine = (debug) ? filterLine_sse2<uint8_t, 4, 255, true> : filterLine_sse2<uint8_t, 4, 255, false>;
             }
             break;
             case 2:
@@ -457,30 +495,30 @@ BWDIF::BWDIF(PClip _child, int field, PClip edeint, int opt, float thr, IScriptE
                 {
                     case 10:
                     {
-                        filterEdgeWithSpat = filterEdge_sse2<uint16_t, true, 4, 1023>;
-                        filterEdgeWithoutSpat = filterEdge_sse2<uint16_t, false, 4, 1023>;
-                        filterLine = filterLine_sse2<uint16_t, 4, 1023>;
+                        filterEdgeWithSpat = (debug) ? filterEdge_sse2<uint16_t, true, 4, 1023, true> : filterEdge_sse2<uint16_t, true, 4, 1023, false>;
+                        filterEdgeWithoutSpat = (debug) ? filterEdge_sse2<uint16_t, false, 4, 1023, true> : filterEdge_sse2<uint16_t, false, 4, 1023, false>;
+                        filterLine = (debug) ? filterLine_sse2<uint16_t, 4, 1023, true> : filterLine_sse2<uint16_t, 4, 1023, false>;
                         break;
                     }
                     case 12:
                     {
-                        filterEdgeWithSpat = filterEdge_sse2<uint16_t, true, 4, 4095>;
-                        filterEdgeWithoutSpat = filterEdge_sse2<uint16_t, false, 4, 4095>;
-                        filterLine = filterLine_sse2<uint16_t, 4, 4095>;
+                        filterEdgeWithSpat = (debug) ? filterEdge_sse2<uint16_t, true, 4, 4095, true> : filterEdge_sse2<uint16_t, true, 4, 4095, false>;
+                        filterEdgeWithoutSpat = (debug) ? filterEdge_sse2<uint16_t, false, 4, 4095, true> : filterEdge_sse2<uint16_t, false, 4, 4095, false>;
+                        filterLine = (debug) ? filterLine_sse2<uint16_t, 4, 4095, true> : filterLine_sse2<uint16_t, 4, 4095, false>;
                         break;
                     }
                     case 14:
                     {
-                        filterEdgeWithSpat = filterEdge_sse2<uint16_t, true, 4, 16383>;
-                        filterEdgeWithoutSpat = filterEdge_sse2<uint16_t, false, 4, 16383>;
-                        filterLine = filterLine_sse2<uint16_t, 4, 16383>;
+                        filterEdgeWithSpat = (debug) ? filterEdge_sse2<uint16_t, true, 4, 16383, true> : filterEdge_sse2<uint16_t, true, 4, 16383, false>;
+                        filterEdgeWithoutSpat = (debug) ? filterEdge_sse2<uint16_t, false, 4, 16383, true> : filterEdge_sse2<uint16_t, false, 4, 16383, false>;
+                        filterLine = (debug) ? filterLine_sse2<uint16_t, 4, 16383, true> : filterLine_sse2<uint16_t, 4, 16383, false>;
                         break;
                     }
                     default:
                     {
-                        filterEdgeWithSpat = filterEdge_sse2<uint16_t, true, 4, 65535>;
-                        filterEdgeWithoutSpat = filterEdge_sse2<uint16_t, false, 4, 65535>;
-                        filterLine = filterLine_sse2<uint16_t, 4, 65535>;
+                        filterEdgeWithSpat = (debug) ? filterEdge_sse2<uint16_t, true, 4, 65535, true> : filterEdge_sse2<uint16_t, true, 4, 65535, false>;
+                        filterEdgeWithoutSpat = (debug) ? filterEdge_sse2<uint16_t, false, 4, 65535, true> : filterEdge_sse2<uint16_t, false, 4, 65535, false>;
+                        filterLine = (debug) ? filterLine_sse2<uint16_t, 4, 65535, true> : filterLine_sse2 < uint16_t, 4, 65535, false >;
                         break;
                     }
                 }
@@ -488,9 +526,9 @@ BWDIF::BWDIF(PClip _child, int field, PClip edeint, int opt, float thr, IScriptE
             break;
             default:
             {
-                filterEdgeWithSpat = filterEdge_sse2<float, true, 4, 1>;
-                filterEdgeWithoutSpat = filterEdge_sse2<float, false, 4, 1>;
-                filterLine = filterLine_sse2<float, 4, 1>;
+                filterEdgeWithSpat = (debug) ? filterEdge_sse2<float, true, 4, 1, true> : filterEdge_sse2<float, true, 4, 1, false>;
+                filterEdgeWithoutSpat = (debug) ? filterEdge_sse2<float, false, 4, 1, true> : filterEdge_sse2<float, false, 4, 1, false>;
+                filterLine = (debug) ? filterLine_sse2<float, 4, 1, true> : filterLine_sse2<float, 4, 1, false>;
             }
             break;
         }
@@ -501,9 +539,9 @@ BWDIF::BWDIF(PClip _child, int field, PClip edeint, int opt, float thr, IScriptE
         {
             case 1:
             {
-                filterEdgeWithSpat = filterEdge_c<uint8_t, true, 1, 255>;
-                filterEdgeWithoutSpat = filterEdge_c<uint8_t, false, 1, 255>;
-                filterLine = filterLine_c<uint8_t, 1, 255>;
+                filterEdgeWithSpat = (debug) ? filterEdge_c<uint8_t, true, 1, 255, true> : filterEdge_c<uint8_t, true, 1, 255, false>;
+                filterEdgeWithoutSpat = (debug) ? filterEdge_c<uint8_t, false, 1, 255, true> : filterEdge_c<uint8_t, false, 1, 255, false>;
+                filterLine = (debug) ? filterLine_c<uint8_t, 1, 255, true> : filterLine_c<uint8_t, 1, 255, false>;
             }
             break;
             case 2:
@@ -512,30 +550,30 @@ BWDIF::BWDIF(PClip _child, int field, PClip edeint, int opt, float thr, IScriptE
                 {
                     case 10:
                     {
-                        filterEdgeWithSpat = filterEdge_c<uint16_t, true, 1, 1023>;
-                        filterEdgeWithoutSpat = filterEdge_c<uint16_t, false, 1, 1023>;
-                        filterLine = filterLine_c<uint16_t, 1, 1023>;
+                        filterEdgeWithSpat = (debug) ? filterEdge_c<uint16_t, true, 1, 1023, true> : filterEdge_c<uint16_t, true, 1, 1023, false>;
+                        filterEdgeWithoutSpat = (debug) ? filterEdge_c<uint16_t, false, 1, 1023, true> : filterEdge_c<uint16_t, false, 1, 1023, false>;
+                        filterLine = (debug) ? filterLine_c<uint16_t, 1, 1023, true> : filterLine_c<uint16_t, 1, 1023, false>;
                         break;
                     }
                     case 12:
                     {
-                        filterEdgeWithSpat = filterEdge_c<uint16_t, true, 1, 4095>;
-                        filterEdgeWithoutSpat = filterEdge_c<uint16_t, false, 1, 4095>;
-                        filterLine = filterLine_c<uint16_t, 1, 4095>;
+                        filterEdgeWithSpat = (debug) ? filterEdge_c<uint16_t, true, 1, 4095, true> : filterEdge_c<uint16_t, true, 1, 4095, false>;
+                        filterEdgeWithoutSpat = (debug) ? filterEdge_c<uint16_t, false, 1, 4095, true> : filterEdge_c<uint16_t, false, 1, 4095, false>;
+                        filterLine = (debug) ? filterLine_c<uint16_t, 1, 4095, true> : filterLine_c<uint16_t, 1, 4095, false>;
                         break;
                     }
                     case 14:
                     {
-                        filterEdgeWithSpat = filterEdge_c<uint16_t, true, 1, 16383>;
-                        filterEdgeWithoutSpat = filterEdge_c<uint16_t, false, 1, 16383>;
-                        filterLine = filterLine_c<uint16_t, 1, 16383>;
+                        filterEdgeWithSpat = (debug) ? filterEdge_c<uint16_t, true, 1, 16383, true> : filterEdge_c<uint16_t, true, 1, 16383, false>;
+                        filterEdgeWithoutSpat = (debug) ? filterEdge_c<uint16_t, false, 1, 16383, true> : filterEdge_c<uint16_t, false, 1, 16383, false>;
+                        filterLine = (debug) ? filterLine_c<uint16_t, 1, 16383, true> : filterLine_c<uint16_t, 1, 16383, false>;
                         break;
                     }
                     default:
                     {
-                        filterEdgeWithSpat = filterEdge_c<uint16_t, true, 1, 65535>;
-                        filterEdgeWithoutSpat = filterEdge_c<uint16_t, false, 1, 65535>;
-                        filterLine = filterLine_c<uint16_t, 1, 65535>;
+                        filterEdgeWithSpat = (debug) ? filterEdge_c<uint16_t, true, 1, 65535, true> : filterEdge_c<uint16_t, true, 1, 65535, false>;
+                        filterEdgeWithoutSpat = (debug) ? filterEdge_c<uint16_t, false, 1, 65535, true> : filterEdge_c<uint16_t, false, 1, 65535, false>;
+                        filterLine = (debug) ? filterLine_c<uint16_t, 1, 65535, true> : filterLine_c<uint16_t, 1, 65535, false>;
                         break;
                     }
                 }
@@ -543,9 +581,9 @@ BWDIF::BWDIF(PClip _child, int field, PClip edeint, int opt, float thr, IScriptE
             break;
             default:
             {
-                filterEdgeWithSpat = filterEdge_c<float, true, 1, 1>;
-                filterEdgeWithoutSpat = filterEdge_c<float, false, 1, 1>;
-                filterLine = filterLine_c<float, 1, 1>;
+                filterEdgeWithSpat = (debug) ? filterEdge_c<float, true, 1, 1, true> : filterEdge_c<float, true, 1, 1, false>;
+                filterEdgeWithoutSpat = (debug) ? filterEdge_c<float, false, 1, 1, true> : filterEdge_c<float, false, 1, 1, false>;
+                filterLine = (debug) ? filterLine_c<float, 1, 1, true> : filterLine_c<float, 1, 1, false>;
             }
             break;
         }
@@ -608,6 +646,7 @@ AVSValue __cdecl Create_BWDIF(AVSValue args, void* user_data, IScriptEnvironment
         edeint,
         args[3].AsInt(-1),
         args[4].AsFloatf(0.0f),
+        args[5].AsBool(false),
         env);
 }
 
@@ -618,7 +657,7 @@ const char* __stdcall AvisynthPluginInit3(IScriptEnvironment * env, const AVS_Li
 {
     AVS_linkage = vectors;
 
-    env->AddFunction("BWDIF", "c[field]i[edeint]c[opt]i[thr]f", Create_BWDIF, 0);
+    env->AddFunction("BWDIF", "c[field]i[edeint]c[opt]i[thr]f[debug]b", Create_BWDIF, 0);
 
     return "BWDIF";
 }

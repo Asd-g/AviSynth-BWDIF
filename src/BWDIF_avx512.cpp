@@ -1,6 +1,6 @@
 #include "BWDIF.h"
 
-template<typename pixel_t, bool spat, int step, int peak>
+template<typename pixel_t, bool spat, int step, int peak, bool debug>
 void filterEdge_avx512(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride, const int stride2,
     float threshold) noexcept
 {
@@ -23,8 +23,8 @@ void filterEdge_avx512(const void* _prev2, const void* _prev, const void* _cur, 
     const pixel_t* next2Above2 = next2 - stride2;
     const pixel_t* next2Below2 = next2 + stride2;
 
-    if (std::is_integral_v<pixel_t>)
-        threshold *= peak;
+    typedef typename std::conditional<sizeof(pixel_t) == 4, float, int>::type thresh;
+    const thresh thr = (std::is_integral_v<pixel_t>) ? static_cast<int>(threshold) : threshold;
 
     for (int x = 0; x < width; x += step)
     {
@@ -51,7 +51,12 @@ void filterEdge_avx512(const void* _prev2, const void* _prev, const void* _cur, 
             }
 
             Vec32s interpol = min(max(!edeint ? (c + e) >> 1 : Vec32s().load_32uc(edeint + x), d - diff), d + diff);
-            interpol = select(temporal_diff <= threshold, d, interpol);
+
+            if constexpr (debug)
+                interpol = select(temporal_diff <= thr, zero_si512(), Vec32s(255));
+            else
+                interpol = select(temporal_diff <= thr, d, interpol);
+
             const auto result = compress_saturated_s2u(interpol, zero_si512()).get_low();
             result.store_nt(dst + x);
         }
@@ -78,7 +83,12 @@ void filterEdge_avx512(const void* _prev2, const void* _prev, const void* _cur, 
             }
 
             Vec16i interpol = min(max(!edeint ? (c + e) >> 1 : Vec16i().load_16us(edeint + x), d - diff), d + diff);
-            interpol = select(temporal_diff <= threshold, d, interpol);
+
+            if constexpr (debug)
+                interpol = select(temporal_diff <= thr, zero_si512(), Vec16i(peak));
+            else
+                interpol = select(temporal_diff <= thr, d, interpol);
+
             const auto result = compress_saturated_s2u(interpol, zero_si512()).get_low();
             min(result, peak).store_nt(dst + x);
         }
@@ -104,13 +114,17 @@ void filterEdge_avx512(const void* _prev2, const void* _prev, const void* _cur, 
                 diff = max(max(temporal_diff, minimum), -maximum);
             }
 
-            const Vec16f interpol = min(max(!edeint ? (c + e) * 0.5f : Vec16f().load_a(edeint + x), d - diff), d + diff);
-            select(temporal_diff <= threshold, d, interpol).store_nt(dst + x);
+            Vec16f interpol = min(max(!edeint ? (c + e) * 0.5f : Vec16f().load_a(edeint + x), d - diff), d + diff);
+
+            if constexpr (debug)
+                select(temporal_diff <= thr, zero_16f(), Vec16f(1.0f)).store_nt(dst + x);
+            else
+                select(temporal_diff <= thr, d, interpol).store_nt(dst + x);
         }
     }
 }
 
-template<typename pixel_t, int step, int peak>
+template<typename pixel_t, int step, int peak, bool debug>
 void filterLine_avx512(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int stride, const int stride2, const int stride3, const int stride4,
     float threshold) noexcept
 {
@@ -139,8 +153,8 @@ void filterLine_avx512(const void* _prev2, const void* _prev, const void* _cur, 
     const pixel_t* next2Below2 = next2 + stride2;
     const pixel_t* next2Below4 = next2 + stride4;
 
-    if (std::is_integral_v<pixel_t>)
-        threshold *= peak;
+    typedef typename std::conditional<sizeof(pixel_t) == 4, float, int>::type thresh;
+    const thresh thr = (std::is_integral_v<pixel_t>) ? static_cast<int>(threshold) : threshold;
 
     for (int x = 0; x < width; x += step)
     {
@@ -170,7 +184,12 @@ void filterLine_avx512(const void* _prev2, const void* _prev, const void* _cur, 
 
             Vec16i interpol = select(abs(c - e) > temporal_diff0, interpol1, interpol2);
             interpol = min(max(!edeint ? interpol : Vec16i().load_16uc(edeint + x), d - diff), d + diff);
-            interpol = select(temporal_diff <= threshold, d, interpol);
+
+            if constexpr (debug)
+                interpol = select(temporal_diff <= thr, zero_si512(), Vec16i(255));
+            else
+                interpol = select(temporal_diff <= thr, d, interpol);
+
             const auto result = compress_saturated_s2u(compress_saturated(interpol, zero_si512()), zero_si512()).get_low().get_low();
             result.store_nt(dst + x);
         }
@@ -200,7 +219,12 @@ void filterLine_avx512(const void* _prev2, const void* _prev, const void* _cur, 
 
             Vec16i interpol = select(abs(c - e) > temporal_diff0, interpol1, interpol2);
             interpol = min(max(!edeint ? interpol : Vec16i().load_16us(edeint + x), d - diff), d + diff);
-            interpol = select(temporal_diff <= threshold, d, interpol);
+
+            if constexpr (debug)
+                interpol = select(temporal_diff <= thr, zero_si512(), Vec16i(peak));
+            else
+                interpol = select(temporal_diff <= thr, d, interpol);
+
             const auto result = compress_saturated_s2u(interpol, zero_si512()).get_low();
             min(result, peak).store_nt(dst + x);
         }
@@ -230,55 +254,95 @@ void filterLine_avx512(const void* _prev2, const void* _prev, const void* _cur, 
 
             Vec16f interpol = select(abs(c - e) > temporal_diff0, interpol1, interpol2);
             interpol = min(max(!edeint ? interpol : Vec16f().load_a(edeint + x), d - diff), d + diff);
-            select(temporal_diff <= threshold, d, interpol).store_nt(dst + x);
+
+            if constexpr (debug)
+                select(temporal_diff <= thr, zero_16f(), Vec16f(1.0f)).store_nt(dst + x);
+            else
+                select(temporal_diff <= thr, d, interpol).store_nt(dst + x);
         }
     }
 }
 
-template void filterEdge_avx512<uint8_t, true, 32, 255>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
+template void filterEdge_avx512<uint8_t, true, 32, 255, true>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
     const int stride2, float threshold) noexcept;
-template void filterEdge_avx512<uint8_t, false, 32, 255>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
+template void filterEdge_avx512<uint8_t, false, 32, 255, true>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
     const int stride2, float threshold) noexcept;
-
-template void filterEdge_avx512<uint16_t, true, 16, 1023>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
+template void filterEdge_avx512<uint8_t, true, 32, 255, false>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
     const int stride2, float threshold) noexcept;
-template void filterEdge_avx512<uint16_t, false, 16, 1023>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
-    const int stride2, float threshold) noexcept;
-
-template void filterEdge_avx512<uint16_t, true, 16, 4095>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
-    const int stride2, float threshold) noexcept;
-template void filterEdge_avx512<uint16_t, false, 16, 4095>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
+template void filterEdge_avx512<uint8_t, false, 32, 255, false>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
     const int stride2, float threshold) noexcept;
 
-template void filterEdge_avx512<uint16_t, true, 16, 16383>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
+template void filterEdge_avx512<uint16_t, true, 16, 1023, true>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
     const int stride2, float threshold) noexcept;
-template void filterEdge_avx512<uint16_t, false, 16, 16383>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
+template void filterEdge_avx512<uint16_t, false, 16, 1023, true>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
     const int stride2, float threshold) noexcept;
-
-template void filterEdge_avx512<uint16_t, true, 16, 65535>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
+template void filterEdge_avx512<uint16_t, true, 16, 1023, false>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
     const int stride2, float threshold) noexcept;
-template void filterEdge_avx512<uint16_t, false, 16, 65535>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
-    const int stride2, float threshold) noexcept;
-
-template void filterEdge_avx512<float, true, 16, 1>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
-    const int stride2, float threshold) noexcept;
-template void filterEdge_avx512<float, false, 16, 1>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
+template void filterEdge_avx512<uint16_t, false, 16, 1023, false>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
     const int stride2, float threshold) noexcept;
 
-template void filterLine_avx512<uint8_t, 16, 255>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int stride, const int stride2, const int stride3,
+template void filterEdge_avx512<uint16_t, true, 16, 4095, true>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
+    const int stride2, float threshold) noexcept;
+template void filterEdge_avx512<uint16_t, false, 16, 4095, true>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
+    const int stride2, float threshold) noexcept;
+template void filterEdge_avx512<uint16_t, true, 16, 4095, false>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
+    const int stride2, float threshold) noexcept;
+template void filterEdge_avx512<uint16_t, false, 16, 4095, false>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
+    const int stride2, float threshold) noexcept;
+
+template void filterEdge_avx512<uint16_t, true, 16, 16383, true>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
+    const int stride2, float threshold) noexcept;
+template void filterEdge_avx512<uint16_t, false, 16, 16383, true>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
+    const int stride2, float threshold) noexcept;
+template void filterEdge_avx512<uint16_t, true, 16, 16383, false>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
+    const int stride2, float threshold) noexcept;
+template void filterEdge_avx512<uint16_t, false, 16, 16383, false>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
+    const int stride2, float threshold) noexcept;
+
+template void filterEdge_avx512<uint16_t, true, 16, 65535, true>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
+    const int stride2, float threshold) noexcept;
+template void filterEdge_avx512<uint16_t, false, 16, 65535, true>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
+    const int stride2, float threshold) noexcept;
+template void filterEdge_avx512<uint16_t, true, 16, 65535, false>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
+    const int stride2, float threshold) noexcept;
+template void filterEdge_avx512<uint16_t, false, 16, 65535, false>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
+    const int stride2, float threshold) noexcept;
+
+template void filterEdge_avx512<float, true, 16, 1, true>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
+    const int stride2, float threshold) noexcept;
+template void filterEdge_avx512<float, false, 16, 1, true>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
+    const int stride2, float threshold) noexcept;
+template void filterEdge_avx512<float, true, 16, 1, false>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
+    const int stride2, float threshold) noexcept;
+template void filterEdge_avx512<float, false, 16, 1, false>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int positiveStride, const int negativeStride,
+    const int stride2, float threshold) noexcept;
+
+template void filterLine_avx512<uint8_t, 16, 255, true>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int stride, const int stride2, const int stride3,
+    const int stride4, float threshold) noexcept;
+template void filterLine_avx512<uint8_t, 16, 255, false>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int stride, const int stride2, const int stride3,
     const int stride4, float threshold) noexcept;
 
-template void filterLine_avx512<uint16_t, 16, 1023>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int stride, const int stride2, const int stride3,
+template void filterLine_avx512<uint16_t, 16, 1023, true>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int stride, const int stride2, const int stride3,
+    const int stride4, float threshold) noexcept;
+template void filterLine_avx512<uint16_t, 16, 1023, false>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int stride, const int stride2, const int stride3,
     const int stride4, float threshold) noexcept;
 
-template void filterLine_avx512<uint16_t, 16, 4095>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int stride, const int stride2, const int stride3,
+template void filterLine_avx512<uint16_t, 16, 4095, true>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int stride, const int stride2, const int stride3,
+    const int stride4, float threshold) noexcept;
+template void filterLine_avx512<uint16_t, 16, 4095, false>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int stride, const int stride2, const int stride3,
     const int stride4, float threshold) noexcept;
 
-template void filterLine_avx512<uint16_t, 16, 16383>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int stride, const int stride2, const int stride3,
+template void filterLine_avx512<uint16_t, 16, 16383, true>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int stride, const int stride2, const int stride3,
+    const int stride4, float threshold) noexcept;
+template void filterLine_avx512<uint16_t, 16, 16383, false>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int stride, const int stride2, const int stride3,
     const int stride4, float threshold) noexcept;
 
-template void filterLine_avx512<uint16_t, 16, 65535>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int stride, const int stride2, const int stride3,
+template void filterLine_avx512<uint16_t, 16, 65535, true>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int stride, const int stride2, const int stride3,
+    const int stride4, float threshold) noexcept;
+template void filterLine_avx512<uint16_t, 16, 65535, false>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int stride, const int stride2, const int stride3,
     const int stride4, float threshold) noexcept;
 
-template void filterLine_avx512<float, 16, 1>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int stride, const int stride2, const int stride3,
+template void filterLine_avx512<float, 16, 1, true>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int stride, const int stride2, const int stride3,
+    const int stride4, float threshold) noexcept;
+template void filterLine_avx512<float, 16, 1, false>(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint_, const int width, const int stride, const int stride2, const int stride3,
     const int stride4, float threshold) noexcept;

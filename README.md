@@ -13,7 +13,7 @@ This is [a port of the VapourSynth plugin Bwdif](https://github.com/HomeOfVapour
 ### Usage:
 
 ```
-BWDIF (clip, int "field", clip "edeint", int "opt", float "thr")
+BWDIF (clip, int "field", clip "edeint", int "opt", float "thr", bool "debug")
 ```
 
 ### Parameters:
@@ -46,9 +46,14 @@ BWDIF (clip, int "field", clip "edeint", int "opt", float "thr")
 
 - thr\
     Threshold for interpolation.\
-    If the difference between pixels of the prev/next frame is less than or equal to this, the resulted pixel wouldn't be interpolated.
-    Must be between 0.0..1.0.
+    If the difference between pixels of the prev/next frame is less than or equal to this, the resulted pixel wouldn't be interpolated.\
+    Must be between 0.0..100.0.\
+    100.0: No interpolation is performed.\
     Default: 0.0.
+
+- debug\
+    Whether to show which pixels will be interpolated.\
+    Default: False.
 
 ### Building:
 
