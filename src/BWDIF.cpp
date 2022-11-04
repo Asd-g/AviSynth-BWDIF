@@ -240,6 +240,34 @@ static inline void filterLine_c(const void* _prev2, const void* _prev, const voi
     }
 }
 
+/* multiplies and divides a rational number, such as a frame duration, in place and reduces the result */
+AVS_FORCEINLINE void muldivRational(int64_t* num, int64_t* den, int64_t mul, int64_t div)
+{
+    /* do nothing if the rational number is invalid */
+    if (!*den)
+        return;
+
+    int64_t a;
+    int64_t b;
+    *num *= mul;
+    *den *= div;
+    a = *num;
+    b = *den;
+
+    while (b != 0)
+    {
+        int64_t t{ a };
+        a = b;
+        b = t % b;
+    }
+
+    if (a < 0)
+        a = -a;
+
+    *num /= a;
+    *den /= a;
+}
+
 class BWDIF : public GenericVideoFilter
 {
     int field_;
@@ -602,23 +630,76 @@ PVideoFrame __stdcall BWDIF::GetFrame(int n, IScriptEnvironment* env)
 {
     PVideoFrame edeint = edeint_ ? edeint_->GetFrame(n, env) : nullptr;
 
-    if (field_ == -1)
-        field_ = child->GetParity(n) ? 1 : 0;
-    if (field_ == -2)
-        field_ = child->GetParity(n) ? 3 : 2;
-
-    int field = field_;
-    if (field_ == -2 || field_ > 1)
+    const int field_no_prop = [&]()
     {
-        field -= 2;
-        field = n & 1 ? (field == 0) : (field == 1);
+        if (field_ == -1)
+            return child->GetParity(n) ? 1 : 0;
+        else if (field_ == -2)
+            return child->GetParity(n) ? 3 : 2;
+        else
+            return -1;
+    }();
+
+    int field = (field_ > -1) ? field_ : field_no_prop;
+
+    const int n_orig = n;
+    if (field > 1)
         n /= 2;
-    }
 
     PVideoFrame prev = child->GetFrame(std::max(n - 1, 0), env);
     PVideoFrame cur = child->GetFrame(n, env);
     PVideoFrame next = child->GetFrame(std::min(n + 1, vi.num_frames - 1), env);
     PVideoFrame dst = env->NewVideoFrame(vi);
+
+    if (field_ < 0)
+    {
+        if (has_at_least_v8)
+        {
+            int err;
+            const int64_t field_based = env->propGetInt(env->getFramePropsRO(cur), "_FieldBased", 0, &err);
+            if (err == 0)
+            {
+                switch (field_based)
+                {
+                    case 1: field = 0; break;
+                    case 2: field = 1; break;
+                    default: env->ThrowError("BWDIF: _FieldBased frame property must be greater than 0."); break;
+                }                    
+
+                if (field_ > 1 || field_no_prop > 1)
+                {
+                    if (field_based == 0)
+                        field -= 2;
+
+                    field = static_cast<int>((n_orig & 1) ? (field == 0) : (field == 1));
+                }
+            }
+            else
+            {
+                if (field > 1)
+                {
+                    field -= 2;
+                    field = static_cast<int>((n_orig & 1) ? (field == 0) : (field == 1));
+                }
+            }
+        }
+        else
+        {
+            if (field > 1)
+            {
+                field -= 2;
+                field = static_cast<int>((n_orig & 1) ? (field == 0) : (field == 1));
+            }
+        }
+    }
+    else
+    {
+        if (field > 1)
+        {
+            field -= 2;
+            field = static_cast<int>((n_orig & 1) ? (field == 0) : (field == 1));
+        }
+    }
 
     switch (vi.ComponentSize())
     {
@@ -631,6 +712,21 @@ PVideoFrame __stdcall BWDIF::GetFrame(int n, IScriptEnvironment* env)
     {
         env->copyFrameProps(cur, dst);
         env->propSetInt(env->getFramePropsRW(dst), "_FieldBased", 0, 0);
+
+        if (field_ > 1 || field_no_prop > 1)
+        {
+            AVSMap* props = env->getFramePropsRW(dst);
+            int errNum;
+            int errDen;
+            int64_t durationNum = env->propGetInt(props, "_DurationNum", 0, &errNum);
+            int64_t durationDen = env->propGetInt(props, "_DurationDen", 0, &errDen);
+            if (errNum == 0 && errDen == 0)
+            {
+                muldivRational(&durationNum, &durationDen, 1, 2);
+                env->propSetInt(props, "_DurationNum", durationNum, 0);
+                env->propSetInt(props, "_DurationNum", durationNum, 0);
+            }
+        }
     }
 
     return dst;

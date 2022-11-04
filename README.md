@@ -23,8 +23,8 @@ BWDIF (clip, int "field", clip "edeint", int "opt", float "thr", bool "debug")
 
 - field\
     Controls the mode of operation (double vs same rate) and which field is kept.\
-    -2: Double rate (alternates each frame), AviSynth internal order.\
-    -1: Same rate, AviSynth internal order.\
+    -2: Double rate (alternates each frame). If `_FieldBased` > `0` - `_FieldBased` frame property order. If ` _FieldBased` is missing or not supported - AviSynth internal order.\
+    -1: Same rate. If `_FieldBased` > `0` - `_FieldBased` frame property order. If ` _FieldBased` is missing or not supported - AviSynth internal order.\
     0: Same rate, keep bottom field.\
     1: Same rate, keep top field.\
     2: Double rate (alternates each frame), starts with bottom.\
