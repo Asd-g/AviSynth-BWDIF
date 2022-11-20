@@ -619,8 +619,8 @@ BWDIF::BWDIF(PClip _child, int field, PClip edeint, int opt, float thr, bool deb
 
     if (field_ == -2 || field_ > 1)
     {
-        vi.num_frames *= 2;
-        vi.fps_numerator *= 2;
+        vi.num_frames <<= 1;
+        vi.fps_numerator <<= 1;
     }
 
     has_at_least_v8 = env->FunctionExists("propShow");
@@ -635,7 +635,7 @@ PVideoFrame __stdcall BWDIF::GetFrame(int n, IScriptEnvironment* env)
         if (field_ == -1)
             return child->GetParity(n) ? 1 : 0;
         else if (field_ == -2)
-            return child->GetParity(n) ? 3 : 2;
+            return child->GetParity(n >> 1) ? 3 : 2;
         else
             return -1;
     }();
@@ -644,7 +644,7 @@ PVideoFrame __stdcall BWDIF::GetFrame(int n, IScriptEnvironment* env)
 
     const int n_orig = n;
     if (field > 1)
-        n /= 2;
+        n >>= 1;
 
     PVideoFrame prev = child->GetFrame(std::max(n - 1, 0), env);
     PVideoFrame cur = child->GetFrame(n, env);
@@ -664,7 +664,7 @@ PVideoFrame __stdcall BWDIF::GetFrame(int n, IScriptEnvironment* env)
                     case 1: field = 0; break;
                     case 2: field = 1; break;
                     default: env->ThrowError("BWDIF: _FieldBased frame property must be greater than 0."); break;
-                }                    
+                }
 
                 if (field_ > 1 || field_no_prop > 1)
                 {

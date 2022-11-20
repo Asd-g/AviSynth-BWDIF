@@ -1,3 +1,6 @@
+##### 1.2.3:
+    Fixed double rate mode.
+
 ##### 1.2.2:
     Added parameter `thr`.
     Added parameter `debug`.
