@@ -284,7 +284,8 @@ class BWDIF : public GenericVideoFilter
         float threshold) noexcept;
 
     template<typename pixel_t>
-    void filter(PVideoFrame& prevFrame, PVideoFrame& curFrame, PVideoFrame& nextFrame, PVideoFrame& dstFrame, PVideoFrame& edeint, const int field, const BWDIF* const __restrict, IScriptEnvironment* env) noexcept;
+    void filter(PVideoFrame& prevFrame, PVideoFrame& curFrame, PVideoFrame& nextFrame, PVideoFrame& dstFrame, PVideoFrame& edeint, const int field, IScriptEnvironment* env) noexcept;
+    void (BWDIF::* filter_)(PVideoFrame& prevFrame, PVideoFrame& curFrame, PVideoFrame& nextFrame, PVideoFrame& dstFrame, PVideoFrame& edeint, const int field, IScriptEnvironment* env) noexcept;
 
 public:
     BWDIF(PClip _child, int field, PClip edeint, int opt, float thr, bool debug, IScriptEnvironment* env);
@@ -296,7 +297,7 @@ public:
 };
 
 template<typename pixel_t>
-void BWDIF::filter(PVideoFrame& prevFrame, PVideoFrame& curFrame, PVideoFrame& nextFrame, PVideoFrame& dstFrame, PVideoFrame& edeintFrame, const int field, const BWDIF* const __restrict, IScriptEnvironment* env) noexcept
+void BWDIF::filter(PVideoFrame& prevFrame, PVideoFrame& curFrame, PVideoFrame& nextFrame, PVideoFrame& dstFrame, PVideoFrame& edeintFrame, const int field, IScriptEnvironment* env) noexcept
 {
     int planes_y[3] = { PLANAR_Y, PLANAR_U, PLANAR_V };
     int planes_r[3] = { PLANAR_G, PLANAR_B, PLANAR_R };
@@ -405,6 +406,7 @@ BWDIF::BWDIF(PClip _child, int field, PClip edeint, int opt, float thr, bool deb
                 filterEdgeWithSpat = (debug) ? filterEdge_avx512<uint8_t, true, 32, 255, true> : filterEdge_avx512<uint8_t, true, 32, 255, false>;
                 filterEdgeWithoutSpat = (debug) ? filterEdge_avx512<uint8_t, false, 32, 255, true> : filterEdge_avx512<uint8_t, false, 32, 255, false>;
                 filterLine = (debug) ? filterLine_avx512<uint8_t, 16, 255, true> : filterLine_avx512<uint8_t, 16, 255, false>;
+                filter_ = &BWDIF::filter<uint8_t>;
             }
             break;
             case 2:
@@ -440,6 +442,8 @@ BWDIF::BWDIF(PClip _child, int field, PClip edeint, int opt, float thr, bool deb
                         break;
                     }
                 }
+
+                filter_ = &BWDIF::filter<uint16_t>;
             }
             break;
             default:
@@ -447,6 +451,7 @@ BWDIF::BWDIF(PClip _child, int field, PClip edeint, int opt, float thr, bool deb
                 filterEdgeWithSpat = (debug) ? filterEdge_avx512<float, true, 16, 1, true> : filterEdge_avx512<float, true, 16, 1, false>;
                 filterEdgeWithoutSpat = (debug) ? filterEdge_avx512<float, false, 16, 1, true> : filterEdge_avx512<float, false, 16, 1, false>;
                 filterLine = (debug) ? filterLine_avx512<float, 16, 1, true> : filterLine_avx512<float, 16, 1, false>;
+                filter_ = &BWDIF::filter<float>;
             }
             break;
         }
@@ -460,6 +465,7 @@ BWDIF::BWDIF(PClip _child, int field, PClip edeint, int opt, float thr, bool deb
                 filterEdgeWithSpat = (debug) ? filterEdge_avx2<uint8_t, true, 16, 255, true> : filterEdge_avx2<uint8_t, true, 16, 255, false>;
                 filterEdgeWithoutSpat = (debug) ? filterEdge_avx2<uint8_t, false, 16, 255, true> : filterEdge_avx2<uint8_t, false, 16, 255, false>;
                 filterLine = (debug) ? filterLine_avx2<uint8_t, 8, 255, true> : filterLine_avx2<uint8_t, 8, 255, false>;
+                filter_ = &BWDIF::filter<uint8_t>;
             }
             break;
             case 2:
@@ -495,6 +501,8 @@ BWDIF::BWDIF(PClip _child, int field, PClip edeint, int opt, float thr, bool deb
                         break;
                     }
                 }
+
+                filter_ = &BWDIF::filter<uint16_t>;
             }
             break;
             default:
@@ -502,6 +510,7 @@ BWDIF::BWDIF(PClip _child, int field, PClip edeint, int opt, float thr, bool deb
                 filterEdgeWithSpat = (debug) ? filterEdge_avx2<float, true, 8, 1, true> : filterEdge_avx2<float, true, 8, 1, false>;
                 filterEdgeWithoutSpat = (debug) ? filterEdge_avx2<float, false, 8, 1, true> : filterEdge_avx2<float, false, 8, 1, false>;
                 filterLine = (debug) ? filterLine_avx2<float, 8, 1, true> : filterLine_avx2<float, 8, 1, false>;
+                filter_ = &BWDIF::filter<float>;
             }
             break;
         }
@@ -515,6 +524,7 @@ BWDIF::BWDIF(PClip _child, int field, PClip edeint, int opt, float thr, bool deb
                 filterEdgeWithSpat = (debug) ? filterEdge_sse2<uint8_t, true, 8, 255, true> : filterEdge_sse2<uint8_t, true, 8, 255, false>;
                 filterEdgeWithoutSpat = (debug) ? filterEdge_sse2<uint8_t, false, 8, 255, true> : filterEdge_sse2<uint8_t, false, 8, 255, false>;
                 filterLine = (debug) ? filterLine_sse2<uint8_t, 4, 255, true> : filterLine_sse2<uint8_t, 4, 255, false>;
+                filter_ = &BWDIF::filter<uint8_t>;
             }
             break;
             case 2:
@@ -550,6 +560,8 @@ BWDIF::BWDIF(PClip _child, int field, PClip edeint, int opt, float thr, bool deb
                         break;
                     }
                 }
+
+                filter_ = &BWDIF::filter<uint16_t>;
             }
             break;
             default:
@@ -557,6 +569,7 @@ BWDIF::BWDIF(PClip _child, int field, PClip edeint, int opt, float thr, bool deb
                 filterEdgeWithSpat = (debug) ? filterEdge_sse2<float, true, 4, 1, true> : filterEdge_sse2<float, true, 4, 1, false>;
                 filterEdgeWithoutSpat = (debug) ? filterEdge_sse2<float, false, 4, 1, true> : filterEdge_sse2<float, false, 4, 1, false>;
                 filterLine = (debug) ? filterLine_sse2<float, 4, 1, true> : filterLine_sse2<float, 4, 1, false>;
+                filter_ = &BWDIF::filter<float>;
             }
             break;
         }
@@ -570,6 +583,7 @@ BWDIF::BWDIF(PClip _child, int field, PClip edeint, int opt, float thr, bool deb
                 filterEdgeWithSpat = (debug) ? filterEdge_c<uint8_t, true, 1, 255, true> : filterEdge_c<uint8_t, true, 1, 255, false>;
                 filterEdgeWithoutSpat = (debug) ? filterEdge_c<uint8_t, false, 1, 255, true> : filterEdge_c<uint8_t, false, 1, 255, false>;
                 filterLine = (debug) ? filterLine_c<uint8_t, 1, 255, true> : filterLine_c<uint8_t, 1, 255, false>;
+                filter_ = &BWDIF::filter<uint8_t>;
             }
             break;
             case 2:
@@ -605,6 +619,8 @@ BWDIF::BWDIF(PClip _child, int field, PClip edeint, int opt, float thr, bool deb
                         break;
                     }
                 }
+
+                filter_ = &BWDIF::filter<uint16_t>;
             }
             break;
             default:
@@ -612,6 +628,7 @@ BWDIF::BWDIF(PClip _child, int field, PClip edeint, int opt, float thr, bool deb
                 filterEdgeWithSpat = (debug) ? filterEdge_c<float, true, 1, 1, true> : filterEdge_c<float, true, 1, 1, false>;
                 filterEdgeWithoutSpat = (debug) ? filterEdge_c<float, false, 1, 1, true> : filterEdge_c<float, false, 1, 1, false>;
                 filterLine = (debug) ? filterLine_c<float, 1, 1, true> : filterLine_c<float, 1, 1, false>;
+                filter_ = &BWDIF::filter<float>;
             }
             break;
         }
@@ -701,12 +718,7 @@ PVideoFrame __stdcall BWDIF::GetFrame(int n, IScriptEnvironment* env)
         }
     }
 
-    switch (vi.ComponentSize())
-    {
-        case 1: filter<uint8_t>(prev, cur, next, dst, edeint, field, 0, env); break;
-        case 2: filter<uint16_t>(prev, cur, next, dst, edeint, field, 0, env); break;
-        default: filter<float>(prev, cur, next, dst, edeint, field, 0, env); break;
-    }
+    (this->*filter_)(prev, cur, next, dst, edeint, field, env);
 
     if (has_at_least_v8)
     {
