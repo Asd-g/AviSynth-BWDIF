@@ -13,7 +13,7 @@ This is [a port of the VapourSynth plugin Bwdif](https://github.com/HomeOfVapour
 ### Usage:
 
 ```
-BWDIF (clip, int "field", clip "edeint", int "opt", float "thr", bool "debug")
+BWDIF (clip, int "field", clip "edeint", int "opt", float "thr", bool "debug", bool "pass")
 ```
 
 ### Parameters:
@@ -53,6 +53,10 @@ BWDIF (clip, int "field", clip "edeint", int "opt", float "thr", bool "debug")
 
 - debug\
     Whether to show which pixels will be interpolated.\
+    Default: False.
+
+- pass\
+    Whether to return the source frame (repeated when double rate) when `_FieldBased` is `0`.
     Default: False.
 
 ### Building:

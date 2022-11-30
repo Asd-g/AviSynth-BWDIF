@@ -274,6 +274,7 @@ class BWDIF : public GenericVideoFilter
     PClip edeint_;
     int opt_;
     float thr_;
+    bool pass_;
     bool has_at_least_v8;
 
     void (*filterEdgeWithSpat)(const void* _prev2, const void* _prev, const void* _cur, const void* _next, const void* _next2, void* _dst, const void* edeint, const int width, const int positiveStride, const int negativeStride, const int stride2,
@@ -288,7 +289,7 @@ class BWDIF : public GenericVideoFilter
     void (BWDIF::* filter_)(PVideoFrame& prevFrame, PVideoFrame& curFrame, PVideoFrame& nextFrame, PVideoFrame& dstFrame, PVideoFrame& edeint, const int field, IScriptEnvironment* env) noexcept;
 
 public:
-    BWDIF(PClip _child, int field, PClip edeint, int opt, float thr, bool debug, IScriptEnvironment* env);
+    BWDIF(PClip _child, int field, PClip edeint, int opt, float thr, bool debug, bool pass, IScriptEnvironment* env);
     PVideoFrame __stdcall GetFrame(int n, IScriptEnvironment* env) override;
     int __stdcall SetCacheHints(int cachehints, int frame_range) override
     {
@@ -360,8 +361,8 @@ void BWDIF::filter(PVideoFrame& prevFrame, PVideoFrame& curFrame, PVideoFrame& n
     }
 }
 
-BWDIF::BWDIF(PClip _child, int field, PClip edeint, int opt, float thr, bool debug, IScriptEnvironment* env)
-    : GenericVideoFilter(_child), field_(field), edeint_(edeint), opt_(opt), thr_(thr)
+BWDIF::BWDIF(PClip _child, int field, PClip edeint, int opt, float thr, bool debug, bool pass, IScriptEnvironment* env)
+    : GenericVideoFilter(_child), field_(field), edeint_(edeint), opt_(opt), thr_(thr), pass_(pass)
 {
     if (!vi.IsPlanar())
         env->ThrowError("BWDIF: only planar formats are supported.");
@@ -680,7 +681,14 @@ PVideoFrame __stdcall BWDIF::GetFrame(int n, IScriptEnvironment* env)
                 {
                     case 1: field = 0; break;
                     case 2: field = 1; break;
-                    default: env->ThrowError("BWDIF: _FieldBased frame property must be greater than 0."); break;
+                    default:
+                    {
+                        if (pass_)
+                            return cur;
+                        else
+                            env->ThrowError("BWDIF: _FieldBased frame property must be greater than 0.");
+                        break;
+                    }
                 }
 
                 if (field_ > 1 || field_no_prop > 1)
@@ -746,15 +754,18 @@ PVideoFrame __stdcall BWDIF::GetFrame(int n, IScriptEnvironment* env)
 
 AVSValue __cdecl Create_BWDIF(AVSValue args, void* user_data, IScriptEnvironment* env)
 {
-    auto edeint = (args[2].Defined()) ? args[2].AsClip() : nullptr;
+    enum { Clip, Field, Edeint, Opt, Thr, Debug, Pass };
+
+    auto edeint = (args[Edeint].Defined()) ? args[Edeint].AsClip() : nullptr;
 
     return new BWDIF(
-        args[0].AsClip(),
-        args[1].AsInt(-1),
+        args[Clip].AsClip(),
+        args[Field].AsInt(-1),
         edeint,
-        args[3].AsInt(-1),
-        args[4].AsFloatf(0.0f),
-        args[5].AsBool(false),
+        args[Opt].AsInt(-1),
+        args[Thr].AsFloatf(0.0f),
+        args[Debug].AsBool(false),
+        args[Pass].AsBool(false),
         env);
 }
 
@@ -765,7 +776,7 @@ const char* __stdcall AvisynthPluginInit3(IScriptEnvironment * env, const AVS_Li
 {
     AVS_linkage = vectors;
 
-    env->AddFunction("BWDIF", "c[field]i[edeint]c[opt]i[thr]f[debug]b", Create_BWDIF, 0);
+    env->AddFunction("BWDIF", "c[field]i[edeint]c[opt]i[thr]f[debug]b[pass]b", Create_BWDIF, 0);
 
     return "BWDIF";
 }
