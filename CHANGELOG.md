@@ -1,3 +1,6 @@
+##### 1.2.4:
+    Added parameter `pass`.
+
 ##### 1.2.3:
     Fixed double rate mode.
 
