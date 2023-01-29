@@ -285,8 +285,8 @@ class BWDIF : public GenericVideoFilter
         float threshold) noexcept;
 
     template<typename pixel_t>
-    void filter(PVideoFrame& prevFrame, PVideoFrame& curFrame, PVideoFrame& nextFrame, PVideoFrame& dstFrame, PVideoFrame& edeint, const int field, IScriptEnvironment* env) noexcept;
-    void (BWDIF::* filter_)(PVideoFrame& prevFrame, PVideoFrame& curFrame, PVideoFrame& nextFrame, PVideoFrame& dstFrame, PVideoFrame& edeint, const int field, IScriptEnvironment* env) noexcept;
+    void filter(PVideoFrame& prevFrame, PVideoFrame& curFrame, PVideoFrame& nextFrame, PVideoFrame& dstFrame, PVideoFrame& edeint, const int field, const int tff, IScriptEnvironment* env) noexcept;
+    void (BWDIF::* filter_)(PVideoFrame& prevFrame, PVideoFrame& curFrame, PVideoFrame& nextFrame, PVideoFrame& dstFrame, PVideoFrame& edeint, const int field, const int tff, IScriptEnvironment* env) noexcept;
 
 public:
     BWDIF(PClip _child, int field, PClip edeint, int opt, float thr, bool debug, bool pass, IScriptEnvironment* env);
@@ -298,7 +298,7 @@ public:
 };
 
 template<typename pixel_t>
-void BWDIF::filter(PVideoFrame& prevFrame, PVideoFrame& curFrame, PVideoFrame& nextFrame, PVideoFrame& dstFrame, PVideoFrame& edeintFrame, const int field, IScriptEnvironment* env) noexcept
+void BWDIF::filter(PVideoFrame& prevFrame, PVideoFrame& curFrame, PVideoFrame& nextFrame, PVideoFrame& dstFrame, PVideoFrame& edeintFrame, const int field, const int tff, IScriptEnvironment* env) noexcept
 {
     int planes_y[3] = { PLANAR_Y, PLANAR_U, PLANAR_V };
     int planes_r[3] = { PLANAR_G, PLANAR_B, PLANAR_R };
@@ -326,8 +326,8 @@ void BWDIF::filter(PVideoFrame& prevFrame, PVideoFrame& curFrame, PVideoFrame& n
         edeint += static_cast<int64_t>(edeint_stride) * field;
         dst += static_cast<int64_t>(dst_stride) * field;
 
-        const pixel_t* prev2 = field ? prev : cur;
-        const pixel_t* next2 = field ? cur : next;
+        const pixel_t* prev2 = (field ^ tff) ? prev : cur;
+        const pixel_t* next2 = (field ^ tff) ? cur : next;
 
         for (int y = field; y < height; y += 2)
         {
@@ -659,6 +659,7 @@ PVideoFrame __stdcall BWDIF::GetFrame(int n, IScriptEnvironment* env)
     }();
 
     int field = (field_ > -1) ? field_ : field_no_prop;
+    int tff = field;
 
     const int n_orig = n;
     if (field > 1)
@@ -679,8 +680,18 @@ PVideoFrame __stdcall BWDIF::GetFrame(int n, IScriptEnvironment* env)
             {
                 switch (field_based)
                 {
-                    case 1: field = 0; break;
-                    case 2: field = 1; break;
+                    case 1:
+                    {
+                        field = 0;
+                        tff = 0;
+                        break;
+                    }
+                    case 2:
+                    {
+                        field = 1;
+                        tff = 1;
+                        break;
+                    }
                     default:
                     {
                         if (pass_)
@@ -696,7 +707,7 @@ PVideoFrame __stdcall BWDIF::GetFrame(int n, IScriptEnvironment* env)
                     if (field_based == 0)
                         field -= 2;
 
-                    field = static_cast<int>((n_orig & 1) ? (field == 0) : (field == 1));
+                    field = (n_orig & 1) ? (1 - field) : field;
                 }
             }
             else
@@ -704,7 +715,7 @@ PVideoFrame __stdcall BWDIF::GetFrame(int n, IScriptEnvironment* env)
                 if (field > 1)
                 {
                     field -= 2;
-                    field = static_cast<int>((n_orig & 1) ? (field == 0) : (field == 1));
+                    field = (n_orig & 1) ? (1 - field) : field;
                 }
             }
         }
@@ -713,7 +724,7 @@ PVideoFrame __stdcall BWDIF::GetFrame(int n, IScriptEnvironment* env)
             if (field > 1)
             {
                 field -= 2;
-                field = static_cast<int>((n_orig & 1) ? (field == 0) : (field == 1));
+                field = (n_orig & 1) ? (1 - field) : field;
             }
         }
     }
@@ -722,11 +733,16 @@ PVideoFrame __stdcall BWDIF::GetFrame(int n, IScriptEnvironment* env)
         if (field > 1)
         {
             field -= 2;
-            field = static_cast<int>((n_orig & 1) ? (field == 0) : (field == 1));
+            field = (n_orig & 1) ? (1 - field) : field;
         }
     }
 
-    (this->*filter_)(prev, cur, next, dst, edeint, field, env);
+    if (tff > 1)
+        tff = (tff == 2) ? 1 : 0;
+    else
+        tff = 1 - tff;
+
+    (this->*filter_)(prev, cur, next, dst, edeint, field, tff, env);
 
     if (has_at_least_v8)
     {
