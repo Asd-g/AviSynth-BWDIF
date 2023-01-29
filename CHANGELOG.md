@@ -1,3 +1,6 @@
+##### 1.2.5:
+    Fixed processing when BFF.
+
 ##### 1.2.4:
     Added parameter `pass`.
 

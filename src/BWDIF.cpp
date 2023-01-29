@@ -28,7 +28,7 @@ static inline void filterEdge_c(const void* _prev2, const void* _prev, const voi
     const pixel_t* next2Below2{ next2 + stride2 };
 
     typedef typename std::conditional<sizeof(pixel_t) == 4, float, int>::type thresh;
-    const thresh thr{ (std::is_integral_v<pixel_t>) ? static_cast<int>(threshold) : threshold };
+    const thresh thr{ (std::is_integral_v<pixel_t>) ? static_cast<int>(threshold) : static_cast<thresh>(threshold) };
 
     for (int x{ 0 }; x < width; ++x)
     {
@@ -142,7 +142,7 @@ static inline void filterLine_c(const void* _prev2, const void* _prev, const voi
     const pixel_t* next2Below4{ next2 + stride4 };
 
     typedef typename std::conditional<sizeof(pixel_t) == 4, float, int>::type thresh;
-    const thresh thr{ (std::is_integral_v<pixel_t>) ? static_cast<int>(threshold) : threshold };
+    const thresh thr{ (std::is_integral_v<pixel_t>) ? static_cast<int>(threshold) : static_cast<thresh>(threshold) };
 
     for (int x{ 0 }; x < width; ++x)
     {
@@ -306,10 +306,10 @@ void BWDIF::filter(PVideoFrame& prevFrame, PVideoFrame& curFrame, PVideoFrame& n
     const int planecount{ std::min(vi.NumComponents(), 3) };
     for (int i{ 0 }; i < planecount; ++i)
     {
-        const int stride{ curFrame->GetPitch(current_planes[i]) / sizeof(pixel_t) };
-        const int edeint_stride{ edeintFrame ? edeintFrame->GetPitch(current_planes[i]) / sizeof(pixel_t) : 0 };
-        const int dst_stride{ dstFrame->GetPitch(current_planes[i]) / sizeof(pixel_t) };
-        const int width{ curFrame->GetRowSize(current_planes[i]) / sizeof(pixel_t) };
+        const int stride{ static_cast<int>(curFrame->GetPitch(current_planes[i]) / sizeof(pixel_t)) };
+        const int edeint_stride{ edeintFrame ? static_cast<int>(edeintFrame->GetPitch(current_planes[i]) / sizeof(pixel_t)) : 0 };
+        const int dst_stride{ static_cast<int>(dstFrame->GetPitch(current_planes[i]) / sizeof(pixel_t)) };
+        const int width{ static_cast<int>(curFrame->GetRowSize(current_planes[i]) / sizeof(pixel_t)) };
         const int height{ curFrame->GetHeight(current_planes[i]) };
         const pixel_t* prev{ reinterpret_cast<const pixel_t*>(prevFrame->GetReadPtr(current_planes[i])) };
         const pixel_t* cur{ reinterpret_cast<const pixel_t*>(curFrame->GetReadPtr(current_planes[i])) };

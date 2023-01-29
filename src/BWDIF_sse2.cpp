@@ -24,7 +24,7 @@ void filterEdge_sse2(const void* _prev2, const void* _prev, const void* _cur, co
     const pixel_t* next2Below2{ next2 + stride2 };
 
     typedef typename std::conditional<sizeof(pixel_t) == 4, float, int>::type thresh;
-    const thresh thr{ (std::is_integral_v<pixel_t>) ? static_cast<int>(threshold) : threshold };
+    const thresh thr{ (std::is_integral_v<pixel_t>) ? static_cast<int>(threshold) : static_cast<thresh>(threshold) };
 
     for (int x{ 0 }; x < width; x += step)
     {
@@ -154,7 +154,7 @@ void filterLine_sse2(const void* _prev2, const void* _prev, const void* _cur, co
     const pixel_t* next2Below4{ next2 + stride4 };
 
     typedef typename std::conditional<sizeof(pixel_t) == 4, float, int>::type thresh;
-    const thresh thr{ (std::is_integral_v<pixel_t>) ? static_cast<int>(threshold) : threshold };
+    const thresh thr{ (std::is_integral_v<pixel_t>) ? static_cast<int>(threshold) : static_cast<thresh>(threshold) };
 
     for (int x{ 0 }; x < width; x += step)
     {
