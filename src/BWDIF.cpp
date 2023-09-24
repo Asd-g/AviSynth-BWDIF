@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <vector>
 
 #include "avisynth.h"
 #include "BWDIF.h"
@@ -291,6 +292,30 @@ class BWDIF : public GenericVideoFilter
 public:
     BWDIF(PClip _child, int field, PClip edeint, int opt, float thr, bool debug, bool pass, IScriptEnvironment* env);
     PVideoFrame __stdcall GetFrame(int n, IScriptEnvironment* env) override;
+
+    bool __stdcall GetParity(int n) override
+    {
+        if (field_ > -3)
+        {
+            const int field_no_prop{ [&]()
+            {
+                switch (field_)
+                {
+                    case -1: return child->GetParity(n) ? 1 : 0;
+                    case -2: return child->GetParity(n >> 1) ? 3 : 2;
+                    default: return -1;
+                }
+            } ()
+            };
+
+            const int tff{ (field_ > -1) ? field_ : field_no_prop };
+
+            return (tff > 1) ? tff - 2 : tff;
+        }
+        else
+            return child->GetParity(n);
+    }
+
     int __stdcall SetCacheHints(int cachehints, int frame_range) override
     {
         return cachehints == CACHE_GET_MTMODE ? MT_NICE_FILTER : 0;
@@ -368,8 +393,8 @@ BWDIF::BWDIF(PClip _child, int field, PClip edeint, int opt, float thr, bool deb
         env->ThrowError("BWDIF: only planar formats are supported.");
     if (vi.height < 4)
         env->ThrowError("BWDIF: height must be greater than or equal to 4.");
-    if (field_ < -2 || field_ > 3)
-        env->ThrowError("BWDIF: field must be -2, -1, 0, 1, 2, or 3.");
+    if (field_ < -4 || field_ > 3)
+        env->ThrowError("BWDIF: field must be between -4..3.");
     if (opt_ < -1 || opt_ > 3)
         env->ThrowError("BWDIF: opt must be between -1..3.");
 
@@ -394,7 +419,7 @@ BWDIF::BWDIF(PClip _child, int field, PClip edeint, int opt, float thr, bool deb
             env->ThrowError("BWDIF: edeint clip's colorspace doesn't match.");
         if (vi.width != vi_.width || vi.height != vi_.height)
             env->ThrowError("BWDIF: input and edeint must be the same resolution.");
-        if (vi.num_frames * ((field_ == -2 || field_ > 1) ? 2 : 1) != vi_.num_frames)
+        if (vi.num_frames * ((field_ == -4 || field_ == -2 || field_ > 1) ? 2 : 1) != vi_.num_frames)
             env->ThrowError("BWDIF: edeint clip's number of frames doesn't match.");
     }
 
@@ -635,7 +660,7 @@ BWDIF::BWDIF(PClip _child, int field, PClip edeint, int opt, float thr, bool deb
         }
     }
 
-    if (field_ == -2 || field_ > 1)
+    if (field_ == -4 || field_ == -2 || field_ > 1)
     {
         vi.num_frames <<= 1;
         vi.fps_numerator <<= 1;
@@ -650,13 +675,16 @@ PVideoFrame __stdcall BWDIF::GetFrame(int n, IScriptEnvironment* env)
 
     const int field_no_prop{ [&]()
     {
-        if (field_ == -1)
-            return child->GetParity(n) ? 1 : 0;
-        else if (field_ == -2)
-            return child->GetParity(n >> 1) ? 3 : 2;
-        else
-            return -1;
-    } () };
+        switch (field_)
+        {
+            case -1: 
+            case -3: return child->GetParity(n) ? 1 : 0;
+            case -2: 
+            case -4: return child->GetParity(n >> 1) ? 3 : 2;
+            default: return -1;
+        }
+    } ()
+    };
 
     int field{ (field_ > -1) ? field_ : field_no_prop };
     int tff{ field };
@@ -672,52 +700,46 @@ PVideoFrame __stdcall BWDIF::GetFrame(int n, IScriptEnvironment* env)
 
     if (field_ < 0)
     {
-        if (has_at_least_v8)
+        if (field_ < -2)
         {
-            int err;
-            const int64_t field_based{ env->propGetInt(env->getFramePropsRO(cur), "_FieldBased", 0, &err) };
-            if (err == 0)
+            if (has_at_least_v8)
             {
-                switch (field_based)
+                int err;
+                const int64_t field_based{ env->propGetInt(env->getFramePropsRO(cur), "_FieldBased", 0, &err) };
+                if (!err)
                 {
-                    case 1:
+                    switch (field_based)
                     {
-                        field = 0;
-                        tff = 0;
-                        break;
+                        case 1:
+                        {
+                            field = 0;
+                            tff = 0;
+                            break;
+                        }
+                        case 2:
+                        {
+                            field = 1;
+                            tff = 1;
+                            break;
+                        }
+                        default:
+                        {
+                            if (pass_)
+                                return cur;
+                            else
+                                env->ThrowError("BWDIF: _FieldBased frame property must be greater than 0.");
+                            break;
+                        }
                     }
-                    case 2:
-                    {
-                        field = 1;
-                        tff = 1;
-                        break;
-                    }
-                    default:
-                    {
-                        if (pass_)
-                            return cur;
-                        else
-                            env->ThrowError("BWDIF: _FieldBased frame property must be greater than 0.");
-                        break;
-                    }
-                }
 
-                if (field_ > 1 || field_no_prop > 1)
-                {
-                    if (field_based == 0)
-                        field -= 2;
-
-                    field = (n_orig & 1) ? (1 - field) : field;
+                    if (field_no_prop > 1)
+                        field = (n_orig & 1) ? (1 - field) : field;
                 }
+                else
+                    env->ThrowError("BWDIF: there is no _FieldBased frame property.");
             }
             else
-            {
-                if (field > 1)
-                {
-                    field -= 2;
-                    field = (n_orig & 1) ? (1 - field) : field;
-                }
-            }
+                env->ThrowError("BWDIF: AviSynth must have frame properties support.");
         }
         else
         {
@@ -737,10 +759,7 @@ PVideoFrame __stdcall BWDIF::GetFrame(int n, IScriptEnvironment* env)
         }
     }
 
-    if (tff > 1)
-        tff = (tff == 2) ? 1 : 0;
-    else
-        tff = 1 - tff;
+    tff = (tff > 1) ? 3 - tff : 1 - tff;
 
     (this->*filter_)(prev, cur, next, dst, edeint, field, tff, env);
 
