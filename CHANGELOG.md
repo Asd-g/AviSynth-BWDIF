@@ -1,3 +1,8 @@
+##### 1.3.0:
+    Added field=-3/-4.
+    Changed back the behavior of field=-2/-1.
+    Set output GetParity.
+
 ##### 1.2.5:
     Fixed processing when BFF.
 

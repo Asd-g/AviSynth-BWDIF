@@ -1,14 +1,10 @@
 #include <winver.h>
-#include <ntdef.h>
 
-VS_VERSION_INFO VERSIONINFO
-FILEVERSION             1,2,5,0
-PRODUCTVERSION        	1,2,5,0
-FILEFLAGSMASK           VS_FFI_FILEFLAGSMASK
-FILEFLAGS               0x0L
+1 VERSIONINFO
+FILEVERSION             1,3,0,0
+PRODUCTVERSION        	1,3,0,0
 FILEOS                  VOS__WINDOWS32
 FILETYPE                VFT_DLL
-FILESUBTYPE             VFT2_UNKNOWN
 BEGIN
     BLOCK "StringFileInfo"
     BEGIN
@@ -16,11 +12,11 @@ BEGIN
         BEGIN
         VALUE "Comments",         "Motion adaptive deinterlacing filter."
         VALUE "FileDescription",  "BWDIF for AviSynth 2.6 / AviSynth+"
-        VALUE "FileVersion",      "1.2.5"
+        VALUE "FileVersion",      "1.3.0"
         VALUE "InternalName",     "BWDIF"
         VALUE "OriginalFilename", "BWDIF.dll"
         VALUE "ProductName",      "BWDIF"
-        VALUE "ProductVersion",   "1.2.5"
+        VALUE "ProductVersion",   "1.3.0"
         END
     END
     BLOCK "VarFileInfo"
