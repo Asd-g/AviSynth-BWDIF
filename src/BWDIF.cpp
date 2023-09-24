@@ -1,5 +1,4 @@
 #include <algorithm>
-#include <vector>
 
 #include "avisynth.h"
 #include "BWDIF.h"
@@ -677,9 +676,9 @@ PVideoFrame __stdcall BWDIF::GetFrame(int n, IScriptEnvironment* env)
     {
         switch (field_)
         {
-            case -1: 
+            case -1:
             case -3: return child->GetParity(n) ? 1 : 0;
-            case -2: 
+            case -2:
             case -4: return child->GetParity(n >> 1) ? 3 : 2;
             default: return -1;
         }
